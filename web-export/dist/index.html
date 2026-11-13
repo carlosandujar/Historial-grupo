@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
+  <title>Export reports · ViRVIG</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="wrap brand">ViRVIG <span class="brand-divider"></span> <span class="brand-sub">Group history</span></div>
+  </header>
+  <main class="wrap">
+    <div class="intro">
+      <h1>Export reports</h1>
+      <p>Generate a Word report on the group's publications, activities, theses, or projects.</p>
+    </div>
+    <div class="layout">
+      <section class="panel export" aria-labelledby="export-title">
+        <h2 id="export-title">Report settings</h2>
+        <form id="export-form">
+          <fieldset id="form-fields">
+            <legend class="sr-only">Export settings</legend>
+            <div class="field">
+              <span class="label" id="kind-label">Report type</span>
+              <div class="switch" role="group" aria-labelledby="kind-label">
+                <label><input type="radio" name="kind" value="journals" checked><span>Journal publications</span></label>
+                <label><input type="radio" name="kind" value="conferences"><span>Conference publications</span></label>
+                <label><input type="radio" name="kind" value="activities"><span>Activities</span></label>
+                <label><input type="radio" name="kind" value="theses"><span>PhD theses</span></label>
+                <label><input type="radio" name="kind" value="progress"><span>Theses in progress</span></label>
+                <label><input type="radio" name="kind" value="projects"><span>International projects</span></label>
+                <label><input type="radio" name="kind" value="national"><span>National projects</span></label>
+              </div>
+            </div>
+            <div class="field">
+              <label class="label" for="workbook">Excel workbook</label>
+              <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required aria-describedby="sheet-hint">
+              <small id="sheet-hint">This report uses the Journals worksheet.</small>
+            </div>
+            <div class="field">
+              <label class="label" for="template">Word template</label>
+              <select id="template" disabled><option>Loading templates…</option></select>
+              <div id="custom-field" class="custom" hidden>
+                <label class="sr-only" for="custom-template">Select your DOCX template</label>
+                <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+              </div>
+            </div>
+            <fieldset id="filters" aria-label="Report filters">
+              <fieldset id="year-filters" aria-label="Year range">
+                <div class="year-grid">
+                  <div class="field"><label class="label" for="from-year">Start year</label><input id="from-year" type="number" min="1000" max="9999" step="1" placeholder="No limit"></div>
+                  <div class="field"><label class="label" for="to-year">End year</label><input id="to-year" type="number" min="1000" max="9999" step="1" placeholder="No limit"></div>
+                </div>
+                <small id="project-years-hint" class="field" hidden>The report includes projects whose dates overlap the selected years.</small>
+              </fieldset>
+              <div class="field">
+                <label class="label" for="teams">Teams <span class="optional">Optional</span></label>
+                <input id="teams" type="text" placeholder="UPC, UdG" aria-describedby="teams-hint">
+                <small id="teams-hint">Separate team names with commas. Leave blank to include all teams.</small>
+              </div>
+              <div class="field">
+                <label class="label" for="participants">Participants <span class="optional">Optional</span></label>
+                <input id="participants" type="text" placeholder="Andújar, Pelechano, Vázquez" aria-describedby="participants-hint">
+                <small id="participants-hint">Enter author last names separated by commas.</small>
+              </div>
+            </fieldset>
+          </fieldset>
+          <div class="actions">
+            <button id="generate" type="submit" disabled>Generate Word report</button>
+            <button id="cancel" class="secondary" type="button" hidden>Cancel</button>
+            <a id="download" class="button secondary" hidden>Download Word report</a>
+          </div>
+          <p id="status" class="status" role="status" aria-live="polite" hidden></p>
+        </form>
+        <noscript>Enable JavaScript to generate reports in your browser.</noscript>
+      </section>
+      <aside class="sidebar" aria-label="Templates and help">
+        <section class="panel library" aria-labelledby="library-title">
+          <h2 id="library-title">Built-in templates</h2>
+          <p>Download a copy, edit it in Word, and select it as your own template.</p>
+          <p id="catalog-status" role="status">Loading templates…</p>
+          <ul id="template-library" class="templates"></ul>
+          <details>
+            <summary>Template fields</summary>
+            <p><strong>Journal and conference publications</strong> · Loop over <code>publications</code> for a flat list or <code>groups</code> to group by year. Each <code>pub</code> includes every named column in its worksheet. Use <code>{{ pub.journal_title }}</code> for journals or <code>{{ pub.conference_proceedings }}</code> for conferences. Access the original value by header, for example <code>{{ pub.excel['Conference proceedings'] }}</code>.</p>
+            <p>Use <code>{{r pub.title_with_link }}</code> and <code>{{r pub.doi_with_link }}</code> for hyperlinks. The formatted citation <code>pub.citation</code> and normalized URL <code>pub.doi_url</code> are also available.</p>
+            <p><strong>Activities</strong> · Loop over <code>activities</code> and use <code>activity.title</code>, <code>activity.date</code>, <code>activity.year</code>, <code>activity.team</code>, <code>activity.description</code>, <code>activity.contacts</code>, and <code>activity.activity_urls</code>.</p>
+            <p><strong>PhD theses</strong> · Loop over <code>theses</code> and use <code>thesis.author</code>, <code>thesis.title</code>, <code>thesis.supervisors</code>, <code>thesis.year</code>, and <code>thesis.team</code>.</p>
+            <p><strong>Theses in progress</strong> · Loop over <code>theses</code> and use <code>thesis.author</code>, <code>thesis.title</code>, <code>thesis.supervisors</code>, <code>thesis.team</code>, and <code>thesis.enrollment</code>. Use <code>{{ theses | length }}</code> for the total.</p>
+            <p><strong>Projects</strong> · Loop over <code>projects</code> and use <code>project.acronym</code>, <code>project.title</code>, <code>project.reference</code>, <code>project.funding_entity</code>, <code>project.call</code>, <code>project.start</code>, <code>project.end</code>, <code>project.amount_display</code>, <code>project.ips</code>, and <code>{{r project.link_text }}</code>.</p>
+            <p>Keep each Jinja tag intact when editing the template. You can change the styles and the surrounding text.</p>
+          </details>
+        </section>
+        <p class="privacy"><strong>Local processing</strong><br>Your browser reads the workbook and template. An internet connection is needed to load Python and its dependencies.</p>
+      </aside>
+    </div>
+  </main>
+</body>
+</html>
