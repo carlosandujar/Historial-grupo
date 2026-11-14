@@ -1,0 +1,21 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild editor/template-editor.js --bundle --minify --format=esm --outfile=dist/template-editor.js"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.34.0",
+    "@tiptap/extension-table": "3.34.0",
+    "@tiptap/extension-text-align": "3.34.0",
+    "@tiptap/pm": "3.34.0",
+    "@tiptap/starter-kit": "3.34.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
+  },
+  "overrides": {
+    "@tiptap/core": "$@tiptap/core",
+    "@tiptap/pm": "$@tiptap/pm"
+  }
+}

@@ -76,7 +76,7 @@ Each exporter reads the workbook and fills a DOCX template. Use `--template` to 
 
 #### Python setup
 
-Run the Python commands from the repository root. Install the dependencies with `python -m pip install lxml truststore openpyxl docxtpl "docxcompose>=2,<3"` and set `$workbook` to the path of your local copy.
+Run the Python commands from the repository root. With Python 3.10 or later, install the dependencies declared in `pyproject.toml` with `python -m pip install .` and set `$workbook` to the path of your local copy.
 
 ```powershell
 $workbook = "../../Historial del Grup/Historial 2026-11.xlsx"
@@ -200,10 +200,16 @@ To preview the updated app locally, run the following from `web-export`.
 
 ```powershell
 python build.py
+npm ci
+npm run build
 python -m http.server 8000 --bind 127.0.0.1 --directory dist
 ```
 
 Open [127.0.0.1:8000](http://127.0.0.1:8000), select a workbook, and generate a test report. The browser processes the workbook and template locally. It needs internet access on the first export to load Pyodide and its dependencies from jsDelivr and PyPI.
 
-To publish the update, upload the **contents** of `web-export/dist/` to the static host so that `index.html` sits at the app's public URL. Preserve the folder structure and upload the app files and built-in templates only. Users select their own workbook in the browser.
+### Deploy to GitHub Pages
+
+In the GitHub repository, set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. The [web-export workflow](.github/workflows/web-export-pages.yml) runs the same build on pull requests targeting `main` and on every push to `main`. Successful builds from pushes to `main` publish `web-export/dist/` to Pages. Open the deployed URL from the workflow's `github-pages` environment.
+
+For other static hosts, upload the contents of `web-export/dist/` so that `index.html` sits at the app's public URL. The deployment contains the app and built-in templates. Users select their workbook in the browser.
 

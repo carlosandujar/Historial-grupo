@@ -5,22 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
   <title>Export reports · ViRVIG</title>
-  <link rel="stylesheet" href="style.css?v=template-download">
-  <script src="app.js?v=template-download" defer></script>
+  <link rel="stylesheet" href="style.css?v=llm-template">
+  <script src="app.js?v=llm-docx-only" defer></script>
 </head>
 <body>
   <header class="masthead">
-    <div class="wrap brand">ViRVIG <span class="brand-divider"></span> <span class="brand-sub">Group history</span></div>
+    <div class="wrap brand">ViRVIG <span class="brand-divider"></span> <span class="brand-sub">Group history</span>
+      <span class="brand-description">Web application to generate group history reports</span>
+    </div>
   </header>
   <main class="wrap">
-    <div class="intro">
-      <h1>Export reports</h1>
-      <p>Generate a Word report on the group's publications, activities, theses, or projects.</p>
-    </div>
-    <div class="layout">
+    <form id="export-form" class="workflow">
+      <section class="panel" aria-labelledby="workbook-title">
+        <h2 id="workbook-title">Workbook</h2>
+        <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+        <div class="workbook-selection">
+          <button id="choose-workbook" class="secondary" type="button">Choose workbook</button>
+          <span id="workbook-name">No workbook selected</span>
+        </div>
+        <small id="workbook-status" role="status" hidden></small>
+      </section>
       <section class="panel export" aria-labelledby="export-title">
         <h2 id="export-title">Report settings</h2>
-        <form id="export-form">
           <fieldset id="form-fields">
             <legend class="sr-only">Export settings</legend>
             <div class="field">
@@ -34,21 +40,8 @@
                 <label><input type="radio" name="kind" value="projects"><span>International projects</span></label>
                 <label><input type="radio" name="kind" value="national"><span>National projects</span></label>
               </div>
-            </div>
-            <div class="field">
-              <label class="label" for="workbook">Excel workbook</label>
-              <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required aria-describedby="sheet-hint">
               <small id="sheet-hint">This report uses the Journals worksheet.</small>
-            </div>
-            <div class="field">
-              <label class="label" for="template">Word template</label>
-              <select id="template" disabled><option>Loading templates…</option></select>
-              <small id="catalog-status" role="status" hidden></small>
-              <a id="template-download" download hidden></a>
-              <div id="custom-field" class="custom" hidden>
-                <label class="sr-only" for="custom-template">Select your DOCX template</label>
-                <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-              </div>
+              <small id="sheet-error" class="field-error" role="status" hidden></small>
             </div>
             <fieldset id="filters" aria-label="Report filters">
               <fieldset id="year-filters" aria-label="Year range">
@@ -70,32 +63,108 @@
               </div>
             </fieldset>
           </fieldset>
-          <div class="actions">
-            <button id="generate" type="submit" disabled>Generate Word report</button>
-            <button id="cancel" class="secondary" type="button" hidden>Cancel</button>
-            <a id="download" class="button secondary" hidden>Download Word report</a>
-          </div>
-          <p id="status" class="status" role="status" aria-live="polite" hidden></p>
-        </form>
         <noscript>Enable JavaScript to generate reports in your browser.</noscript>
       </section>
-      <aside class="sidebar" aria-label="Template help">
-        <section class="panel" aria-labelledby="library-title">
-          <h2 id="library-title">Template help</h2>
-          <details>
-            <summary>Template fields</summary>
-            <p><strong>Journal and conference publications</strong> · Loop over <code>publications</code> for a flat list or <code>groups</code> to group by year. Each <code>pub</code> includes every named column in its worksheet. Use <code>{{ pub.journal_title }}</code> for journals or <code>{{ pub.conference_proceedings }}</code> for conferences. Access the original value by header, for example <code>{{ pub.excel['Conference proceedings'] }}</code>.</p>
-            <p>Use <code>{{r pub.title_with_link }}</code> and <code>{{r pub.doi_with_link }}</code> for hyperlinks. The formatted citation <code>pub.citation</code> and normalized URL <code>pub.doi_url</code> are also available.</p>
-            <p><strong>Activities</strong> · Loop over <code>activities</code> and use <code>activity.title</code>, <code>activity.date</code>, <code>activity.year</code>, <code>activity.team</code>, <code>activity.description</code>, <code>activity.contacts</code>, and <code>activity.activity_urls</code>.</p>
-            <p><strong>PhD theses</strong> · Loop over <code>theses</code> and use <code>thesis.author</code>, <code>thesis.title</code>, <code>thesis.supervisors</code>, <code>thesis.year</code>, and <code>thesis.team</code>.</p>
-            <p><strong>Theses in progress</strong> · Loop over <code>theses</code> and use <code>thesis.author</code>, <code>thesis.title</code>, <code>thesis.supervisors</code>, <code>thesis.team</code>, and <code>thesis.enrollment</code>. Use <code>{{ theses | length }}</code> for the total.</p>
-            <p><strong>Projects</strong> · Loop over <code>projects</code> and use <code>project.acronym</code>, <code>project.title</code>, <code>project.reference</code>, <code>project.funding_entity</code>, <code>project.call</code>, <code>project.start</code>, <code>project.end</code>, <code>project.amount_display</code>, <code>project.ips</code>, and <code>{{r project.link_text }}</code>.</p>
-            <p>Keep each Jinja tag intact when editing the template. You can change the styles and the surrounding text.</p>
-          </details>
+      <div class="document-panels">
+        <section class="panel" aria-labelledby="template-title">
+          <h2 id="template-title">Template</h2>
+          <fieldset id="template-settings">
+            <legend class="sr-only">Template settings</legend>
+            <label class="label" for="template">Word template</label>
+            <select id="template" disabled><option>Loading templates…</option></select>
+            <small id="catalog-status" role="status" hidden></small>
+            <div id="custom-field" class="custom" hidden>
+              <label class="sr-only" for="custom-template">Select your DOCX template</label>
+              <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+            </div>
+            <div class="actions template-actions">
+              <a id="template-download" class="button secondary" download hidden>Download template</a>
+              <button id="edit-template-copy" type="button" class="secondary" hidden>Edit a copy</button>
+            </div>
+            <button id="create-template" class="secondary create-template" type="button">Create a new template with a visual editor</button>
+            <div class="actions template-actions">
+              <button id="generate-template-prompt" class="secondary" type="button" disabled>Generate a template with an LLM</button>
+            </div>
+          </fieldset>
+          <p id="editor-status" class="document-note" role="status" hidden></p>
+          <div id="visual-template" hidden>
+            <fieldset id="editor-toolbar" class="editor-toolbar" aria-label="Template editor controls">
+              <select aria-label="Insert field" data-field-picker></select>
+              <select aria-label="Paragraph style" data-text-style>
+                <option value="0">Paragraph</option><option value="1">Heading 1</option>
+                <option value="2">Heading 2</option><option value="3">Heading 3</option>
+              </select>
+              <select aria-label="Alignment" data-align>
+                <option value="left">Align left</option><option value="center">Center</option>
+                <option value="right">Align right</option><option value="justify">Justify</option>
+              </select>
+              <button type="button" data-command="bold" data-mark="bold">Bold</button>
+              <button type="button" data-command="italic" data-mark="italic">Italic</button>
+              <button type="button" data-command="underline" data-mark="underline">Underline</button>
+              <button type="button" data-command="bullets">Bullets</button>
+              <button type="button" data-command="numbers">Numbered list</button>
+              <button type="button" data-command="expression">Expression</button>
+              <button type="button" data-command="repeat">Repeat block</button>
+              <button type="button" data-command="condition">If block</button>
+              <button type="button" data-command="otherwise">Otherwise</button>
+              <button type="button" data-command="end">End block</button>
+              <button type="button" data-command="table">Insert table</button>
+              <button type="button" data-command="row" data-table>Add row</button>
+              <button type="button" data-command="column" data-table>Add column</button>
+              <button type="button" data-command="deleteRow" data-table>Delete row</button>
+              <button type="button" data-command="deleteColumn" data-table>Delete column</button>
+              <button type="button" data-command="header" data-table>Toggle header</button>
+              <button type="button" data-command="merge" data-table>Merge or split cells</button>
+              <button type="button" data-command="repeatRow" data-table>Repeat row</button>
+            </fieldset>
+            <div id="template-editor" class="template-editor"></div>
+            <button id="download-visual-template" type="button" class="secondary create-template">Download template</button>
+          </div>
+          <section class="template-fields" aria-labelledby="template-fields-title">
+            <h3 id="template-fields-title">Template fields</h3>
+            <p id="template-fields-context">Loading fields…</p>
+            <ul id="template-fields-list"></ul>
+          </section>
         </section>
-        <p class="privacy"><strong>Local processing</strong><br>Your browser reads the workbook and template. An internet connection is needed to load Python and its dependencies.</p>
-      </aside>
-    </div>
+        <section class="panel preview-panel" aria-labelledby="preview-title">
+          <h2 id="preview-title">Preview</h2>
+          <p id="preview-status" class="document-note" role="status"></p>
+          <iframe id="preview-document" class="preview-document" title="Read-only Word report preview" sandbox hidden></iframe>
+        </section>
+      </div>
+      <section class="panel" aria-labelledby="output-title">
+        <h2 id="output-title">Report output</h2>
+        <div class="actions">
+          <button id="generate" type="submit" disabled>Generate Word report</button>
+          <button id="cancel" class="secondary" type="button" hidden>Cancel</button>
+          <a id="download" class="button secondary" hidden>Download Word report</a>
+        </div>
+        <p id="status" class="status" role="status" hidden></p>
+      </section>
+    </form>
   </main>
+  <dialog id="llm-dialog" class="template-dialog" aria-labelledby="llm-dialog-title">
+    <form>
+      <h2 id="llm-dialog-title">Generate a template with an LLM</h2>
+      <p id="llm-dialog-help">Copy the prompt and add a layout example or screenshot in your LLM. Upload the resulting DOCX through Use my own template… and choose Edit a copy.</p>
+      <label class="label" for="llm-template-text">Prompt</label>
+      <textarea id="llm-template-text" aria-describedby="llm-dialog-help" spellcheck="false" readonly></textarea>
+      <p id="llm-dialog-status" class="document-note" role="status" hidden></p>
+      <div class="actions dialog-actions">
+        <button id="close-llm-dialog" class="secondary" type="button">Close</button>
+        <button type="submit">Copy prompt</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="app-dialog" class="template-dialog" aria-labelledby="dialog-title">
+    <form method="dialog">
+      <h2 id="dialog-title"></h2>
+      <div id="dialog-fields"></div>
+      <div class="actions dialog-actions">
+        <button class="secondary" type="submit" value="cancel" formnovalidate>Cancel</button>
+        <button id="dialog-accept" type="submit" value="accept">Apply</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

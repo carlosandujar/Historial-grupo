@@ -7,8 +7,8 @@ from zipfile import BadZipFile
 from docx.opc.exceptions import PackageNotFoundError
 from docxtpl import DocxTemplate
 from jinja2 import Environment, StrictUndefined, TemplateError
-from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+from report_workbook import open_report_workbook
 from workbook_cli import parse_workbook_args
 
 from export_publications import TEMPLATE_DIR, cell_text, team_names
@@ -22,8 +22,7 @@ FIELDS = {"Author": "author", "Title": "title", "Supervisors": "supervisors", "Y
 
 def read_theses(path, first_year, last_year, teams, participants=""):
     selected = participant_names(participants)
-    workbook = load_workbook(path, read_only=True, data_only=True)
-    try:
+    with open_report_workbook(path) as workbook:
         if SHEET not in workbook.sheetnames:
             raise ValueError(f"No se encontró la hoja {SHEET}.")
         rows = workbook[SHEET].values
@@ -52,8 +51,6 @@ def read_theses(path, first_year, last_year, teams, participants=""):
             thesis["year"] = year
             theses.append(thesis)
         return sorted(theses, key=lambda thesis: thesis["year"] or 0, reverse=True)
-    finally:
-        workbook.close()
 
 
 def render(template, output, theses, *, jinja_env=None):
