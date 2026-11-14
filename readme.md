@@ -200,6 +200,8 @@ To preview the updated app locally, run the following from `web-export`.
 
 ```powershell
 python build.py
+npm ci
+npm run build
 python -m http.server 8000 --bind 127.0.0.1 --directory dist
 ```
 

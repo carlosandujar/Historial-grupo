@@ -1,6 +1,7 @@
 const runtimeURL = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
 const pythonFiles = ["export_publications.py", "export_conferences.py", "export_activities.py", "export_phd_theses.py", "export_phd_in_progress.py", "export_projects_international.py",
-  "export_projects_national.py", "participant_filter.py", "workbook_cli.py", "report_workbook.py", "sample_workbook.py", "bridge.py"];
+  "export_projects_national.py", "participant_filter.py", "workbook_cli.py", "report_workbook.py",
+  "sample_workbook.py", "template_fields.py", "template_docx.py", "bridge.py"];
 let runtime;
 
 function reportError(error) {
@@ -47,6 +48,18 @@ self.onmessage = async ({ data }) => {
   try {
     runtime ??= boot();
     python = await runtime;
+    if (data.editorRequest) {
+      bridge = python.pyimport("bridge");
+      if (data.editorRequest === "fields") {
+        self.postMessage({ editorRequest: data.editorRequest, kind: data.kind,
+          catalog: JSON.parse(bridge.template_fields(data.kind)) });
+      } else {
+        bridge.build_template(data.visualTemplate);
+        const bytes = python.FS.readFile("template.docx").slice();
+        self.postMessage({ editorRequest: data.editorRequest, kind: data.kind, document: bytes.buffer }, [bytes.buffer]);
+      }
+      return;
+    }
     if (data.inspect) {
       python.FS.writeFile("input.xlsx", new Uint8Array(data.workbook));
       bridge = python.pyimport("bridge");
@@ -58,8 +71,9 @@ self.onmessage = async ({ data }) => {
     if (data.workbook) {
       python.FS.writeFile("input.xlsx", new Uint8Array(data.workbook));
     }
-    python.FS.writeFile("template.docx", new Uint8Array(data.template));
     bridge = python.pyimport("bridge");
+    if (data.visualTemplate) bridge.build_template(data.visualTemplate);
+    else python.FS.writeFile("template.docx", new Uint8Array(data.template));
     if (data.workbook) bridge.load_history();
     // Pyodide maps undefined to None and null to JsNull.
     const counts = JSON.parse(bridge.generate.callKwargs(
@@ -69,7 +83,8 @@ self.onmessage = async ({ data }) => {
     const document = python.FS.readFile("output.docx").slice();
     self.postMessage({ ...counts, preview: data.preview, document: document.buffer }, [document.buffer]);
   } catch (error) {
-    self.postMessage({ error: reportError(error), setup: !python, inspection: data.inspection, preview: data.preview });
+    self.postMessage({ error: reportError(error), setup: !python, inspection: data.inspection,
+      preview: data.preview, editorRequest: data.editorRequest, kind: data.kind });
     if (!python) runtime = undefined;
   } finally {
     bridge?.destroy();

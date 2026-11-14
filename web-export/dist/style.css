@@ -32,6 +32,22 @@ h2 { font-size: 1.25rem; letter-spacing: -.018em; }
 #workbook-name, .document-note { color: var(--muted); overflow-wrap: anywhere; }
 .field-error { color: #8b2030; }
 .preview-document { display: block; width: 100%; height: clamp(280px, 55vh, 650px); border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; }
+.create-template { margin-top: 10px; }
+.editor-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.editor-toolbar select, .editor-toolbar button { width: auto; max-width: 100%; min-height: 34px; padding: 4px 8px; font-size: .85rem; }
+.editor-toolbar button { color: var(--accent-dark); background: #eef5f3; border-color: var(--border); }
+.editor-toolbar button[aria-pressed="true"] { color: white; background: var(--accent); }
+.template-editor { border: 1px solid var(--border); border-radius: 8px; overflow: auto; }
+.template-editor .tiptap { min-height: 200px; padding: 12px; line-height: 1.55; overflow-wrap: anywhere; }
+.template-editor .tiptap p { min-height: 1.55em; }
+.template-editor table { border-collapse: collapse; table-layout: fixed; }
+.template-editor th, .template-editor td { position: relative; border: 1px solid var(--border); padding: 5px 8px; vertical-align: top; min-width: 45px; }
+.template-editor th { background: #edf2f5; }
+.template-editor tr[data-repeat] { background: #eef9f6; }
+.template-editor .selectedCell { background: #d3eee6; }
+.template-editor .column-resize-handle { position: absolute; top: 0; bottom: 0; right: -2px; width: 4px; background: var(--accent); pointer-events: none; }
+.field-chip { display: inline; padding: 1px 4px; border-radius: 4px; background: #e6f2ee; color: #07574e; }
+.template-control { margin: 5px 0; padding: 4px 8px; border-left: 3px solid var(--accent); background: #eef5f3; font-size: .85rem; }
 fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
 .field { margin-bottom: 18px; min-width: 0; }
 .label { display: block; font-size: .93rem; font-weight: 690; margin-bottom: 7px; }

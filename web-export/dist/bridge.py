@@ -16,12 +16,18 @@ import export_phd_in_progress as in_progress
 import export_projects_international as projects
 import export_projects_national as national
 from sample_workbook import create_sample_workbook
+from template_docx import build_template
+from template_fields import editor_fields
 
 
 workbook = None
 sample_workbook = None
 selection = None
 selected_rows = None
+
+
+def template_fields(kind):
+    return editor_fields(kind, workbook)
 
 
 def load_history():

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
   <title>Export reports · ViRVIG</title>
-  <link rel="stylesheet" href="style.css?v=live-preview">
-  <script src="app.js?v=live-preview" defer></script>
+  <link rel="stylesheet" href="style.css?v=visual-editor">
+  <script src="app.js?v=visual-editor" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -72,6 +72,7 @@
                 <label class="sr-only" for="custom-template">Select your DOCX template</label>
                 <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
               </div>
+              <button id="create-template" class="secondary create-template" type="button">Create visual template</button>
             </div>
           </fieldset>
         <noscript>Enable JavaScript to generate reports in your browser.</noscript>
@@ -81,6 +82,40 @@
           <h2 id="template-title">Template</h2>
           <p id="template-name" class="document-note">Loading templates…</p>
           <a id="template-download" download hidden></a>
+          <p id="editor-status" class="document-note" role="status" hidden></p>
+          <div id="visual-template" hidden>
+            <fieldset id="editor-toolbar" class="editor-toolbar" aria-label="Template editor controls">
+              <select aria-label="Insert field" data-field-picker></select>
+              <select aria-label="Paragraph style" data-text-style>
+                <option value="0">Paragraph</option><option value="1">Heading 1</option>
+                <option value="2">Heading 2</option><option value="3">Heading 3</option>
+              </select>
+              <select aria-label="Alignment" data-align>
+                <option value="left">Align left</option><option value="center">Center</option>
+                <option value="right">Align right</option><option value="justify">Justify</option>
+              </select>
+              <button type="button" data-command="bold" data-mark="bold">Bold</button>
+              <button type="button" data-command="italic" data-mark="italic">Italic</button>
+              <button type="button" data-command="underline" data-mark="underline">Underline</button>
+              <button type="button" data-command="bullets">Bullets</button>
+              <button type="button" data-command="numbers">Numbered list</button>
+              <button type="button" data-command="expression">Expression</button>
+              <button type="button" data-command="repeat">Repeat block</button>
+              <button type="button" data-command="condition">If block</button>
+              <button type="button" data-command="otherwise">Otherwise</button>
+              <button type="button" data-command="end">End block</button>
+              <button type="button" data-command="table">Insert table</button>
+              <button type="button" data-command="row" data-table>Add row</button>
+              <button type="button" data-command="column" data-table>Add column</button>
+              <button type="button" data-command="deleteRow" data-table>Delete row</button>
+              <button type="button" data-command="deleteColumn" data-table>Delete column</button>
+              <button type="button" data-command="header" data-table>Toggle header</button>
+              <button type="button" data-command="merge" data-table>Merge or split cells</button>
+              <button type="button" data-command="repeatRow" data-table>Repeat row</button>
+            </fieldset>
+            <div id="template-editor" class="template-editor"></div>
+            <button id="download-visual-template" type="button" class="secondary create-template">Download template</button>
+          </div>
           <details>
             <summary>Template fields</summary>
             <p><strong>Journal and conference publications</strong> · Loop over <code>publications</code> for a flat list or <code>groups</code> to group by year. Each <code>pub</code> includes every named column in its worksheet. Use <code>{{ pub.journal_title }}</code> for journals or <code>{{ pub.conference_proceedings }}</code> for conferences. Access the original value by header, for example <code>{{ pub.excel['Conference proceedings'] }}</code>.</p>

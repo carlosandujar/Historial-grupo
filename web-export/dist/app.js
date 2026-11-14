@@ -50,6 +50,76 @@ let previewTimer;
 let previewRevision = 0;
 let previewPending = false;
 let previewLibrary;
+let visualEditor;
+let visualKind;
+let editorModule;
+let editorDownloadPending = false;
+
+function showEditorStatus(message, error = false) {
+  const notice = byId("editor-status");
+  notice.hidden = !message;
+  notice.textContent = message;
+  notice.classList.toggle("field-error", error);
+}
+
+function closeVisualEditor() {
+  visualEditor?.destroy();
+  visualEditor = undefined;
+  visualKind = undefined;
+  byId("visual-template").hidden = true;
+  template.querySelector('option[value="visual"]')?.remove();
+  showEditorStatus("");
+}
+
+function templatePayload() {
+  return JSON.stringify({ kind: visualKind, document: visualEditor.getJSON() });
+}
+
+function requestEditorFields() {
+  try {
+    getWorker().postMessage({ editorRequest: "fields", kind: visualKind });
+  } catch (error) {
+    closeVisualEditor();
+    showEditorStatus(error.message, true);
+  }
+}
+
+async function openVisualEditor(data) {
+  if (activeJob || data.kind !== visualKind || data.kind !== selectedKind()) return;
+  if (data.error) {
+    if (!visualEditor) closeVisualEditor();
+    showEditorStatus(data.error, true);
+    return;
+  }
+  if (visualEditor) {
+    visualEditor.setCatalog(data.catalog);
+    return;
+  }
+  try {
+    editorModule ??= import("./template-editor.js?v=visual-editor").catch(error => {
+      editorModule = undefined;
+      throw error;
+    });
+    const { createTemplateEditor } = await editorModule;
+    if (activeJob || data.kind !== visualKind || data.kind !== selectedKind() || visualEditor) return;
+    visualEditor = createTemplateEditor({
+      element: byId("template-editor"),
+      toolbar: byId("editor-toolbar"),
+      catalog: data.catalog,
+      onChange: () => { clearDownload(); showStatus(""); schedulePreview(); },
+    });
+    template.add(new Option("Visual template draft", "visual"));
+    template.value = "visual";
+    updateTemplateSelection();
+    clearDownload();
+    showStatus("");
+    showEditorStatus("");
+    schedulePreview();
+  } catch {
+    closeVisualEditor();
+    showEditorStatus("Could not load the visual editor. You can still use a Word template.", true);
+  }
+}
 
 function reportFilters() {
   return {
@@ -62,10 +132,11 @@ function reportFilters() {
 }
 
 async function readTemplate() {
-  if (template.value === "custom") return customTemplate.files[0].arrayBuffer();
+  if (template.value === "visual") return { visualTemplate: templatePayload() };
+  if (template.value === "custom") return { template: await customTemplate.files[0].arrayBuffer() };
   const response = await fetch(template.value, { cache: "no-cache", signal: AbortSignal.timeout(10_000) });
   if (!response.ok) throw new Error("The built-in template could not be found.");
-  return response.arrayBuffer();
+  return { template: await response.arrayBuffer() };
 }
 
 function showPreviewStatus(message, error = false) {
@@ -113,7 +184,7 @@ async function runPreview() {
     finishPreview(job, "Preview timed out. Change a setting to retry.");
   }, 120_000);
   try {
-    const bytes = await readTemplate();
+    const source = await readTemplate();
     if (job !== previewJob || job.revision !== previewRevision || activeJob) return;
     const engine = getWorker();
     const workbookBytes = !sample && workerWorkbook !== workbookFile ? await workbookFile.arrayBuffer() : null;
@@ -121,8 +192,8 @@ async function runPreview() {
     job.usingWorker = true;
     job.workbook = sample ? undefined : workbookFile;
     job.workerDone = new Promise(resolve => { job.releaseWorker = resolve; });
-    engine.postMessage({ ...filters, preview: true, sample, template: bytes, workbook: workbookBytes },
-      workbookBytes ? [bytes, workbookBytes] : [bytes]);
+    engine.postMessage({ ...filters, ...source, preview: true, sample, workbook: workbookBytes },
+      [source.template, workbookBytes].filter(Boolean));
   } catch (error) {
     finishPreview(job, error.message);
   } finally {
@@ -239,11 +310,13 @@ async function loadCatalog() {
 
 function updateTemplateSelection() {
   const custom = template.value === "custom";
+  const visual = template.value === "visual";
+  byId("visual-template").hidden = !visual;
   byId("custom-field").hidden = !custom;
   customTemplate.required = custom;
   customTemplate.disabled = !custom;
   const selected = catalog?.[selectedKind()]?.find(({ url }) => url === template.value);
-  byId("template-name").textContent = selected?.label ?? (custom
+  byId("template-name").textContent = visual ? "Visual template draft" : selected?.label ?? (custom
     ? customTemplate.files[0]?.name ?? "Choose a DOCX template."
     : "Loading templates…");
   templateDownload.hidden = !selected;
@@ -281,6 +354,9 @@ function showStatus(message, state = "progress") {
 function setBusy(busy) {
   fields.disabled = busy;
   chooseWorkbook.disabled = busy;
+  byId("editor-toolbar").disabled = busy;
+  byId("download-visual-template").disabled = busy || editorDownloadPending;
+  visualEditor?.setEditable(!busy);
   updateSheetStatus();
   cancel.hidden = !busy;
 }
@@ -303,6 +379,11 @@ function resetWorker() {
   worker?.terminate();
   worker = undefined;
   workerWorkbook = undefined;
+  if (editorDownloadPending) {
+    editorDownloadPending = false;
+    byId("download-visual-template").disabled = Boolean(activeJob);
+    showEditorStatus("Template download was interrupted. Try again.", true);
+  }
 }
 
 function stop(message, state) {
@@ -324,10 +405,31 @@ function startTimer(job, milliseconds) {
 
 function getWorker() {
   if (worker) return worker;
-  const engine = new Worker("worker.js?v=live-preview");
+  const engine = new Worker("worker.js?v=visual-editor");
   worker = engine;
   engine.onmessage = ({ data }) => {
     if (worker !== engine) return;
+    if (data.editorRequest === "fields") {
+      openVisualEditor(data);
+      return;
+    }
+    if (data.editorRequest === "download") {
+      editorDownloadPending = false;
+      byId("download-visual-template").disabled = Boolean(activeJob);
+      if (data.error) showEditorStatus(data.error, true);
+      else {
+        const url = URL.createObjectURL(new Blob([data.document], {
+          type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }));
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${data.kind ?? selectedKind()}-template.docx`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        showEditorStatus("");
+      }
+      return;
+    }
     if (data.inspection !== undefined) {
       if (data.inspection !== inspection) return;
       clearTimeout(inspectionTimer);
@@ -337,6 +439,7 @@ function getWorker() {
         ? (data.setup ? "Could not start Python. Check your connection and choose the workbook again." : `Could not read the workbook. ${data.error}`)
         : "", Boolean(data.error));
       updateSheetStatus();
+      if (visualKind) requestEditorFields();
       schedulePreview();
       return;
     }
@@ -388,6 +491,10 @@ function getWorker() {
     }
     else {
       resetWorker();
+      if (visualKind && !visualEditor) {
+        closeVisualEditor();
+        showEditorStatus("Could not start the visual editor. Try again.", true);
+      }
       if (previewJob) finishPreview(previewJob, "Python could not run in the browser.");
       if (workbookFile && !workbookSheets) {
         clearTimeout(inspectionTimer);
@@ -397,6 +504,34 @@ function getWorker() {
   };
   return engine;
 }
+
+byId("create-template").addEventListener("click", () => {
+  if (visualEditor && visualKind === selectedKind()) {
+    template.value = "visual";
+    updateTemplateSelection();
+    clearDownload();
+    showStatus("");
+    schedulePreview();
+    return;
+  }
+  visualKind = selectedKind();
+  showEditorStatus("Loading visual editor…");
+  requestEditorFields();
+});
+
+byId("download-visual-template").addEventListener("click", () => {
+  if (editorDownloadPending || !visualEditor || activeJob) return;
+  try {
+    editorDownloadPending = true;
+    byId("download-visual-template").disabled = true;
+    showEditorStatus("Preparing template…");
+    getWorker().postMessage({ editorRequest: "download", kind: visualKind, visualTemplate: templatePayload() });
+  } catch (error) {
+    editorDownloadPending = false;
+    byId("download-visual-template").disabled = false;
+    showEditorStatus(error.message, true);
+  }
+});
 
 chooseWorkbook.addEventListener("click", () => workbook.click());
 workbook.addEventListener("change", async () => {
@@ -438,16 +573,23 @@ workbook.addEventListener("change", async () => {
 });
 
 form.addEventListener("change", ({ target }) => {
-  if (target.name === "kind") updateOptions();
+  if (target.name === "kind") {
+    if (visualEditor && !window.confirm("Discard the visual template draft and switch report types?")) {
+      form.querySelector(`input[name="kind"][value="${visualKind}"]`).checked = true;
+      return;
+    }
+    closeVisualEditor();
+    updateOptions();
+  }
   if (target === template || target === customTemplate) updateTemplateSelection();
-  if (target !== workbook && !activeJob) {
+  if (fields.contains(target) && !activeJob) {
     clearDownload();
     showStatus("");
     schedulePreview();
   }
 });
 form.addEventListener("input", ({ target }) => {
-  if (!activeJob && target.type !== "file" && target.type !== "radio" && target !== template) {
+  if (!activeJob && fields.contains(target) && target.type !== "file" && target.type !== "radio" && target !== template) {
     clearDownload();
     showStatus("");
     schedulePreview();
@@ -483,14 +625,14 @@ form.addEventListener("submit", async (event) => {
     // priority over the next automatic preview.
     if (previewJob?.usingWorker) await previewJob.workerDone;
     if (activeJob !== job) return;
-    const [workbookBytes, templateBytes] = await Promise.all([
+    const [workbookBytes, source] = await Promise.all([
       workerWorkbook === input ? null : input.arrayBuffer(),
       readTemplate(),
     ]);
     if (activeJob !== job) return;
     getWorker().postMessage({
-      ...filters, workbook: workbookBytes, template: templateBytes,
-    }, workbookBytes ? [workbookBytes, templateBytes] : [templateBytes]);
+      ...filters, ...source, workbook: workbookBytes,
+    }, [source.template, workbookBytes].filter(Boolean));
   } catch (error) {
     if (activeJob !== job) return;
     finish();

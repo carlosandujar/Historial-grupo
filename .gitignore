@@ -15,5 +15,7 @@ __pycache__/
 /web-export/dist/export_*.py
 /web-export/dist/participant_filter.py
 /web-export/dist/report_workbook.py
+/web-export/node_modules/
+/web-export/dist/template-editor.js
 /web-export/dist/workbook_cli.py
 /web-export/dist/templates/
