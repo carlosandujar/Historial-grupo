@@ -60,6 +60,73 @@ let visualBase;
 let copyCandidate;
 let inspectedSource;
 let copyRequest = 0;
+let fieldReferenceRequest = 0;
+
+function showDialog({ title, message, inputs = [], accept = "Apply" }) {
+  const dialog = byId("app-dialog");
+  if (dialog.open) return Promise.resolve(null);
+  const content = byId("dialog-fields");
+  content.replaceChildren();
+  byId("dialog-title").textContent = title;
+  byId("dialog-accept").textContent = accept;
+  if (message) {
+    const text = document.createElement("p");
+    text.textContent = message;
+    content.append(text);
+  }
+  const controls = inputs.map(({ label, value = "", options, required, placeholder }) => {
+    const field = document.createElement("label");
+    field.className = "field label";
+    field.textContent = label;
+    const control = document.createElement(options ? "select" : "input");
+    if (options) control.replaceChildren(...options.map(option => new Option(option)));
+    if (placeholder) control.placeholder = placeholder;
+    control.value = value;
+    control.required = Boolean(required);
+    field.append(control);
+    content.append(field);
+    return control;
+  });
+  (controls[0] || dialog.querySelector('[value="cancel"]')).autofocus = true;
+  dialog.returnValue = "cancel";
+  return new Promise(resolve => {
+    dialog.addEventListener("close", () => {
+      resolve(dialog.returnValue === "accept" ? controls.map(control => control.value.trim()) : null);
+    }, { once: true });
+    dialog.showModal();
+  });
+}
+
+function requestFieldReference() {
+  const request = ++fieldReferenceRequest;
+  byId("template-fields-list").replaceChildren();
+  byId("template-fields-context").textContent = "Loading fields…";
+  try {
+    getWorker().postMessage({ editorRequest: "field-reference", kind: selectedKind(), request });
+  } catch {
+    byId("template-fields-context").textContent = "Could not load template fields.";
+  }
+}
+
+function showFieldReference(data) {
+  if (data.request !== fieldReferenceRequest || data.kind !== selectedKind()) return;
+  const context = byId("template-fields-context");
+  if (data.error) {
+    context.textContent = "Could not load template fields.";
+    return;
+  }
+  const { collection, item, fields: available } = data.catalog;
+  context.textContent = `Loop over ${collection} as ${item}.${item === "pub"
+    ? " Use groups to group by year and pub.excel to access original Excel columns." : ""}`;
+  const items = Object.entries(available).filter(([name]) => !name.startsWith("pub.excel[")).map(([name, info]) => {
+    const item = document.createElement("li");
+    const code = document.createElement("code");
+    code.textContent = `{{${info.rich ? "r" : ""} ${name} }}`;
+    item.append(code);
+    return item;
+  });
+  byId("template-fields-list").replaceChildren(...items);
+}
 
 function showEditorStatus(message, error = false) {
   const notice = byId("editor-status");
@@ -83,9 +150,12 @@ function templatePayload() {
   return JSON.stringify({ kind: visualKind, document: visualEditor.getJSON() });
 }
 
-function discardDraft() {
-  return !visualEditor || templatePayload() === draftSaved
-    || window.confirm("Discard the unsaved template changes?");
+async function discardDraft() {
+  return !visualEditor || templatePayload() === draftSaved || Boolean(await showDialog({
+    title: "Discard unsaved changes?",
+    message: "Changes made to this template since the last download will be lost.",
+    accept: "Discard changes",
+  }));
 }
 
 function requestEditorFields() {
@@ -109,7 +179,7 @@ async function openVisualEditor(data) {
     return;
   }
   try {
-    editorModule ??= import("./template-editor.js?v=template-copies").catch(error => {
+    editorModule ??= import("./template-editor.js?v=report-ui").catch(error => {
       editorModule = undefined;
       throw error;
     });
@@ -120,6 +190,7 @@ async function openVisualEditor(data) {
       element: byId("template-editor"),
       toolbar: byId("editor-toolbar"),
       catalog: data.catalog,
+      showDialog,
       content: data.draft?.document,
       onChange: () => {
         byId("template-name").textContent = "Edited template";
@@ -374,22 +445,20 @@ function updateTemplateSelection() {
   customTemplate.required = custom;
   customTemplate.disabled = !custom;
   const selected = catalog?.[selectedKind()]?.find(({ url }) => url === template.value);
-  byId("template-name").textContent = visual ? (visualBase ? "Editable copy" : "Visual template draft") : selected?.label ?? (custom
-    ? customTemplate.files[0]?.name ?? "Choose a DOCX template."
-    : "Loading templates…");
   const file = custom && customTemplate.files[0];
+  const templateName = selected ? `${selected.label} (${decodeURIComponent(selected.url.split("/").at(-1))})` : file?.name;
+  byId("template-name").textContent = visual ? (visualBase ? "Editable copy" : "Visual template draft")
+    : templateName ? `Selected template: ${templateName}`
+      : custom ? "Choose a DOCX template." : "Loading templates…";
   if (templateDownload.href.startsWith("blob:")) URL.revokeObjectURL(templateDownload.href);
   templateDownload.hidden = !(selected || file);
   templateDownload.download = file ? file.name : "";
   if (selected) {
     templateDownload.href = selected.url;
-    templateDownload.textContent = `Download template '${selected.label}'`;
   } else if (file) {
     templateDownload.href = URL.createObjectURL(file);
-    templateDownload.textContent = `Download template '${file.name}'`;
   } else {
     templateDownload.removeAttribute("href");
-    templateDownload.textContent = "";
   }
   byId("edit-template-copy").hidden = true;
 }
@@ -471,10 +540,14 @@ function startTimer(job, milliseconds) {
 
 function getWorker() {
   if (worker) return worker;
-  const engine = new Worker("worker.js?v=template-copies");
+  const engine = new Worker("worker.js?v=report-ui");
   worker = engine;
   engine.onmessage = ({ data }) => {
     if (worker !== engine) return;
+    if (data.editorRequest === "field-reference") {
+      showFieldReference(data);
+      return;
+    }
     if (data.editorRequest === "open") {
       if (data.request !== copyRequest || !inspectedSource) return;
       if (data.error) {
@@ -522,6 +595,7 @@ function getWorker() {
         ? (data.setup ? "Could not start Python. Check your connection and choose the workbook again." : `Could not read the workbook. ${data.error}`)
         : "", Boolean(data.error));
       updateSheetStatus();
+      requestFieldReference();
       if (visualKind) requestEditorFields();
       schedulePreview();
       return;
@@ -602,8 +676,8 @@ byId("create-template").addEventListener("click", () => {
   requestEditorFields();
 });
 
-byId("edit-template-copy").addEventListener("click", () => {
-  if (!copyCandidate || !discardDraft()) return;
+byId("edit-template-copy").addEventListener("click", async () => {
+  if (!copyCandidate || !await discardDraft()) return;
   closeVisualEditor();
   visualKind = selectedKind();
   visualBase = inspectedSource.bytes;
@@ -665,14 +739,16 @@ workbook.addEventListener("change", async () => {
   }
 });
 
-form.addEventListener("change", ({ target }) => {
+form.addEventListener("change", async ({ target }) => {
   if (target.name === "kind") {
-    if (!discardDraft()) {
+    if (visualEditor && templatePayload() !== draftSaved) {
       form.querySelector(`input[name="kind"][value="${visualKind}"]`).checked = true;
-      return;
+      if (!await discardDraft()) return;
+      target.checked = true;
     }
     closeVisualEditor();
     updateOptions();
+    requestFieldReference();
   }
   if (target === template || target === customTemplate) updateTemplateSelection();
   if (target.name === "kind" || target === template || target === customTemplate) inspectSelectedTemplate();
@@ -735,6 +811,7 @@ form.addEventListener("submit", async (event) => {
 });
 
 updateOptions();
+requestFieldReference();
 loadCatalog();
 
 window.addEventListener("beforeunload", event => {

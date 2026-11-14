@@ -18,12 +18,10 @@ body { margin: 0; }
 .brand { min-height: 64px; display: flex; align-items: center; gap: 12px; font-weight: 750; }
 .brand-divider { width: 1px; height: 22px; background: #637487; margin-inline: 4px; }
 .brand-sub { color: #d5e1eb; font-weight: 500; }
-main { padding-block: 44px 52px; }
-.intro { margin-bottom: 30px; }
-h1, h2, p { margin: 0; }
-h1 { font-size: clamp(2rem, 4vw, 3rem); font-weight: 780; letter-spacing: -.045em; line-height: 1.15; }
+.brand-description { color: #d5e1eb; font-size: .9rem; font-weight: 500; margin-inline-start: 10px; }
+main { padding-block: 24px 52px; }
+h2, h3, p { margin: 0; }
 h2 { font-size: 1.25rem; letter-spacing: -.018em; }
-.intro p { color: var(--muted); margin-top: 10px; line-height: 1.5; }
 .workflow { display: grid; gap: 20px; }
 .document-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
 .panel { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 26px; box-shadow: 0 4px 14px #102d4310; }
@@ -31,7 +29,8 @@ h2 { font-size: 1.25rem; letter-spacing: -.018em; }
 .workbook-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
 #workbook-name, .document-note { color: var(--muted); overflow-wrap: anywhere; }
 .field-error { color: #8b2030; }
-.preview-document { display: block; width: 100%; height: clamp(280px, 55vh, 650px); border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; }
+.preview-panel { display: flex; flex-direction: column; min-width: 0; }
+.preview-document { display: block; width: 100%; flex: 1 0 0; min-height: clamp(280px, 55vh, 650px); border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; }
 .create-template { margin-top: 10px; }
 .editor-toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
 .editor-toolbar select, .editor-toolbar button { width: auto; max-width: 100%; min-height: 34px; padding: 4px 8px; font-size: .85rem; }
@@ -75,19 +74,25 @@ button:disabled { opacity: .65; cursor: wait; }
 .status { margin-top: 13px; padding: 10px 12px; border-radius: 7px; color: #184256; background: #eaf2f6; font-size: .88rem; overflow-wrap: anywhere; }
 .status[data-state="error"] { color: #8b2030; background: #fbeef0; }
 .status[data-state="success"] { color: #0a5547; background: #e9f6f0; }
-details p { margin-top: 9px; font-size: .91rem; color: var(--muted); line-height: 1.55; }
-#template-download + details { margin-top: 12px; }
-#template-download { display: inline-block; margin-top: 6px; color: #055b51; font-weight: 650; font-size: .9rem; }
-summary { cursor: pointer; font-weight: 650; font-size: .9rem; }
+.template-fields { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; font-size: .9rem; }
+.template-fields h3 { font-size: .95rem; margin-bottom: 6px; }
+.template-fields p { color: var(--muted); line-height: 1.5; }
+#template-fields-list { display: flex; flex-wrap: wrap; gap: 5px 8px; padding: 0; margin: 8px 0 0; list-style: none; }
+#template-fields-list li { max-width: 100%; border-radius: 4px; background: #eef5f3; padding: 2px 5px; }
+.template-actions { margin-top: 10px; }
+.template-actions:not(:has(> :not([hidden]))) { display: none; }
 code { color: #24445c; overflow-wrap: anywhere; }
-.privacy { color: var(--muted); font-size: .84rem; line-height: 1.55; margin: 17px 5px 0; }
-.privacy strong { color: #27445b; }
+#app-dialog { width: min(460px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--border); border-radius: 16px; color: inherit; box-shadow: 0 20px 60px #102d4340; }
+#app-dialog::backdrop { background: #142b4366; }
+#app-dialog h2 { margin-bottom: 16px; }
+.dialog-actions { justify-content: flex-end; margin-top: 18px; }
 @media (max-width: 1050px) {
   .switch { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 760px) {
   .document-panels { grid-template-columns: 1fr; }
-  main { padding-block: 30px; }
+  .brand { flex-wrap: wrap; gap: 6px 12px; padding-block: 10px; }
+  .brand-description { flex-basis: 100%; margin-inline-start: 0; }
   .panel { padding: 20px; }
 }
 @media (max-width: 480px) {

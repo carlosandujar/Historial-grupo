@@ -5,18 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
   <title>Export reports · ViRVIG</title>
-  <link rel="stylesheet" href="style.css?v=visual-editor">
-  <script src="app.js?v=template-copies" defer></script>
+  <link rel="stylesheet" href="style.css?v=template-actions">
+  <script src="app.js?v=template-actions" defer></script>
 </head>
 <body>
   <header class="masthead">
-    <div class="wrap brand">ViRVIG <span class="brand-divider"></span> <span class="brand-sub">Group history</span></div>
+    <div class="wrap brand">ViRVIG <span class="brand-divider"></span> <span class="brand-sub">Group history</span>
+      <span class="brand-description">Web application to generate group history reports</span>
+    </div>
   </header>
   <main class="wrap">
-    <div class="intro">
-      <h1>Export reports</h1>
-      <p>Generate a Word report on the group's publications, activities, theses, or projects.</p>
-    </div>
     <form id="export-form" class="workflow">
       <section class="panel" aria-labelledby="workbook-title">
         <h2 id="workbook-title">Workbook</h2>
@@ -72,7 +70,7 @@
                 <label class="sr-only" for="custom-template">Select your DOCX template</label>
                 <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
               </div>
-              <button id="create-template" class="secondary create-template" type="button">Create visual template</button>
+              <button id="create-template" class="secondary create-template" type="button">Create a new template with a visual editor</button>
             </div>
           </fieldset>
         <noscript>Enable JavaScript to generate reports in your browser.</noscript>
@@ -81,8 +79,10 @@
         <section class="panel" aria-labelledby="template-title">
           <h2 id="template-title">Template</h2>
           <p id="template-name" class="document-note">Loading templates…</p>
-          <a id="template-download" download hidden></a>
-          <button id="edit-template-copy" type="button" class="secondary create-template" hidden>Edit a copy</button>
+          <div class="actions template-actions">
+            <a id="template-download" class="button secondary" download hidden>Download template</a>
+            <button id="edit-template-copy" type="button" class="secondary" hidden>Edit a copy</button>
+          </div>
           <p id="editor-status" class="document-note" role="status" hidden></p>
           <div id="visual-template" hidden>
             <fieldset id="editor-toolbar" class="editor-toolbar" aria-label="Template editor controls">
@@ -117,18 +117,13 @@
             <div id="template-editor" class="template-editor"></div>
             <button id="download-visual-template" type="button" class="secondary create-template">Download template</button>
           </div>
-          <details>
-            <summary>Template fields</summary>
-            <p><strong>Journal and conference publications</strong> · Loop over <code>publications</code> for a flat list or <code>groups</code> to group by year. Each <code>pub</code> includes every named column in its worksheet. Use <code>{{ pub.journal_title }}</code> for journals or <code>{{ pub.conference_proceedings }}</code> for conferences. Access the original value by header, for example <code>{{ pub.excel['Conference proceedings'] }}</code>.</p>
-            <p>Use <code>{{r pub.title_with_link }}</code> and <code>{{r pub.doi_with_link }}</code> for hyperlinks. The formatted citation <code>pub.citation</code> and normalized URL <code>pub.doi_url</code> are also available.</p>
-            <p><strong>Activities</strong> · Loop over <code>activities</code> and use <code>activity.title</code>, <code>activity.date</code>, <code>activity.year</code>, <code>activity.team</code>, <code>activity.description</code>, <code>activity.contacts</code>, and <code>activity.activity_urls</code>.</p>
-            <p><strong>PhD theses</strong> · Loop over <code>theses</code> and use <code>thesis.author</code>, <code>thesis.title</code>, <code>thesis.supervisors</code>, <code>thesis.year</code>, and <code>thesis.team</code>.</p>
-            <p><strong>Theses in progress</strong> · Loop over <code>theses</code> and use <code>thesis.author</code>, <code>thesis.title</code>, <code>thesis.supervisors</code>, <code>thesis.team</code>, and <code>thesis.enrollment</code>. Use <code>{{ theses | length }}</code> for the total.</p>
-            <p><strong>Projects</strong> · Loop over <code>projects</code> and use <code>project.acronym</code>, <code>project.title</code>, <code>project.reference</code>, <code>project.funding_entity</code>, <code>project.call</code>, <code>project.start</code>, <code>project.end</code>, <code>project.amount_display</code>, <code>project.ips</code>, and <code>{{r project.link_text }}</code>.</p>
-            <p>Keep each Jinja tag intact when editing the template. You can change the styles and the surrounding text.</p>
-          </details>
+          <section class="template-fields" aria-labelledby="template-fields-title">
+            <h3 id="template-fields-title">Template fields</h3>
+            <p id="template-fields-context">Loading fields…</p>
+            <ul id="template-fields-list"></ul>
+          </section>
         </section>
-        <section class="panel" aria-labelledby="preview-title">
+        <section class="panel preview-panel" aria-labelledby="preview-title">
           <h2 id="preview-title">Preview</h2>
           <p id="preview-status" class="document-note" role="status"></p>
           <iframe id="preview-document" class="preview-document" title="Read-only Word report preview" sandbox hidden></iframe>
@@ -142,9 +137,18 @@
           <a id="download" class="button secondary" hidden>Download Word report</a>
         </div>
         <p id="status" class="status" role="status" hidden></p>
-        <p class="privacy"><strong>Local processing</strong><br>Your browser reads the workbook and template. An internet connection is needed to load Python and its dependencies.</p>
       </section>
     </form>
   </main>
+  <dialog id="app-dialog" aria-labelledby="dialog-title">
+    <form method="dialog">
+      <h2 id="dialog-title"></h2>
+      <div id="dialog-fields"></div>
+      <div class="actions dialog-actions">
+        <button class="secondary" type="submit" value="cancel" formnovalidate>Cancel</button>
+        <button id="dialog-accept" type="submit" value="accept">Apply</button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

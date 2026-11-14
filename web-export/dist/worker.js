@@ -50,8 +50,9 @@ self.onmessage = async ({ data }) => {
     python = await runtime;
     if (data.editorRequest) {
       bridge = python.pyimport("bridge");
-      if (data.editorRequest === "fields") {
+      if (data.editorRequest === "fields" || data.editorRequest === "field-reference") {
         self.postMessage({ editorRequest: data.editorRequest, kind: data.kind,
+          request: data.request,
           catalog: JSON.parse(bridge.template_fields(data.kind)) });
       } else if (data.editorRequest === "open") {
         python.FS.writeFile("template-source.docx", new Uint8Array(data.baseTemplate));

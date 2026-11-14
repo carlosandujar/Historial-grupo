@@ -110,7 +110,7 @@ function starter(catalog) {
   ] };
 }
 
-export function createTemplateEditor({ element, toolbar, catalog, content, onChange }) {
+export function createTemplateEditor({ element, toolbar, catalog, content, showDialog, onChange }) {
   const picker = toolbar.querySelector("[data-field-picker]");
   let fields = catalog;
   let previousScope;
@@ -151,14 +151,18 @@ export function createTemplateEditor({ element, toolbar, catalog, content, onCha
     editor.chain().focus().insertContent({ type: "field", attrs: { expression, ...attrs } }).run();
   }
 
-  function editExpression() {
+  async function editExpression() {
     const selected = editor.isActive("field") ? editor.getAttributes("field") : {};
-    const expression = window.prompt("Jinja expression without braces, for example pub.title | upper", selected.expression ?? "");
-    if (!expression?.trim()) return;
-    const condition = window.prompt("Optional condition for this field, for example pub.doi_url", selected.condition ?? "");
-    if (condition === null) return;
-    const attrs = { expression: expression.trim(), condition: condition.trim(),
-      label: "", rich: fields.fields[expression.trim()]?.rich ?? false };
+    const result = await showDialog({
+      title: "Jinja expression",
+      inputs: [
+        { label: "Expression without braces", value: selected.expression, required: true, placeholder: `${fields.item}.title | upper` },
+        { label: "Condition (optional)", value: selected.condition },
+      ],
+    });
+    if (!result?.[0] || editor.isDestroyed) return;
+    const [expression, condition] = result;
+    const attrs = { expression, condition, label: "", rich: fields.fields[expression]?.rich ?? false };
     if (selected.expression) editor.chain().focus().updateAttributes("field", attrs).run();
     else insertField(attrs.expression, attrs);
   }
@@ -169,15 +173,18 @@ export function createTemplateEditor({ element, toolbar, catalog, content, onCha
     editor.chain().focus().insertContentAt(position, { type: "control", attrs: { action, value } }).run();
   }
 
-  function chooseCollection() {
+  async function chooseCollection(title) {
     const scope = scopeAtCursor(editor, fields);
     const options = [fields.collection];
     if (fields.item === "pub") {
       options.push("groups");
       if (scope.has("group")) options.push("group.publications");
     }
-    const choice = window.prompt(`Collection to repeat: ${options.join(", ")}`, scope.has("group") ? "group.publications" : fields.collection);
-    return options.includes(choice?.trim()) ? choice.trim() : null;
+    const result = await showDialog({
+      title, inputs: [{ label: "Collection", options,
+        value: scope.has("group") ? "group.publications" : fields.collection }],
+    });
+    return editor.isDestroyed ? null : result?.[0];
   }
 
   const commands = {
@@ -187,10 +194,10 @@ export function createTemplateEditor({ element, toolbar, catalog, content, onCha
     bullets: () => editor.chain().focus().toggleBulletList().run(),
     numbers: () => editor.chain().focus().toggleOrderedList().run(),
     expression: editExpression,
-    repeat: () => { const key = chooseCollection(); if (key) insertControl("repeat", key); },
-    condition: () => {
-      const condition = window.prompt("Show the following blocks when this Jinja condition is true");
-      if (condition?.trim()) insertControl("if", condition.trim());
+    repeat: async () => { const key = await chooseCollection("Repeat block"); if (key) insertControl("repeat", key); },
+    condition: async () => {
+      const result = await showDialog({ title: "If block", inputs: [{ label: "Jinja condition", required: true }] });
+      if (result?.[0] && !editor.isDestroyed) insertControl("if", result[0]);
     },
     otherwise: () => insertControl("else"),
     end: () => insertControl("end"),
@@ -201,9 +208,9 @@ export function createTemplateEditor({ element, toolbar, catalog, content, onCha
     deleteColumn: () => editor.chain().focus().deleteColumn().run(),
     header: () => editor.chain().focus().toggleHeaderRow().run(),
     merge: () => editor.chain().focus().mergeOrSplit().run(),
-    repeatRow: () => {
+    repeatRow: async () => {
       const current = editor.getAttributes("tableRow").repeat;
-      const key = current ? null : chooseCollection();
+      const key = current ? null : await chooseCollection("Repeat row");
       if (current || key) {
         editor.chain().focus().updateAttributes("tableRow", { repeat: key }).run();
         updateTools(editor);
