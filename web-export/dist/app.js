@@ -62,6 +62,7 @@ let copyCandidate;
 let inspectedSource;
 let copyRequest = 0;
 let fieldReferenceRequest = 0;
+let fieldCatalog;
 
 function showDialog({ title, message, inputs = [], accept = "Apply" }) {
   const dialog = byId("app-dialog");
@@ -100,6 +101,8 @@ function showDialog({ title, message, inputs = [], accept = "Apply" }) {
 
 function requestFieldReference() {
   const request = ++fieldReferenceRequest;
+  fieldCatalog = undefined;
+  byId("generate-template-prompt").disabled = true;
   byId("template-fields-list").replaceChildren();
   byId("template-fields-context").textContent = "Loading fields…";
   try {
@@ -117,6 +120,8 @@ function showFieldReference(data) {
     return;
   }
   const { collection, item, fields: available } = data.catalog;
+  fieldCatalog = data.catalog;
+  byId("generate-template-prompt").disabled = false;
   context.textContent = `Loop over ${collection} as ${item}.${item === "pub"
     ? " Use groups to group by year and pub.excel to access original Excel columns." : ""}`;
   const items = Object.entries(available).filter(([name]) => !name.startsWith("pub.excel[")).map(([name, info]) => {
@@ -168,6 +173,14 @@ function requestEditorFields() {
   }
 }
 
+function loadEditorModule() {
+  editorModule ??= import("./template-editor.js?v=report-ui").catch(error => {
+    editorModule = undefined;
+    throw error;
+  });
+  return editorModule;
+}
+
 async function openVisualEditor(data) {
   if (activeJob || data.kind !== visualKind || data.kind !== selectedKind()) return;
   if (data.error) {
@@ -180,13 +193,9 @@ async function openVisualEditor(data) {
     return;
   }
   try {
-    editorModule ??= import("./template-editor.js?v=report-ui").catch(error => {
-      editorModule = undefined;
-      throw error;
-    });
-    const { createTemplateEditor } = await editorModule;
+    const { createTemplateEditor } = await loadEditorModule();
     if (activeJob || data.kind !== visualKind || data.kind !== selectedKind() || visualEditor
-        || (data.request !== undefined && data.request !== copyRequest)) return;
+        || (data.editorRequest === "open" && data.request !== copyRequest)) return;
     visualEditor = createTemplateEditor({
       element: byId("template-editor"),
       toolbar: byId("editor-toolbar"),
@@ -213,6 +222,44 @@ async function openVisualEditor(data) {
     showEditorStatus("Could not load the visual editor. You can still use a Word template.", true);
   }
 }
+
+const llmDialog = byId("llm-dialog");
+const llmText = byId("llm-template-text");
+
+function llmStatus(message) {
+  const status = byId("llm-dialog-status");
+  status.textContent = message;
+  status.hidden = !message;
+}
+
+byId("generate-template-prompt").addEventListener("click", async () => {
+  const kind = selectedKind();
+  const fields = fieldCatalog;
+  if (!fields) return;
+  try {
+    const { templatePrompt } = await import("./template-prompt.js?v=llm-docx-only");
+    if (kind !== selectedKind() || fields !== fieldCatalog || llmDialog.open || activeJob) return;
+    const reportName = form.querySelector(`input[name="kind"][value="${kind}"] + span`).textContent;
+    llmText.value = templatePrompt(kind, reportName, fields);
+    llmStatus("");
+    llmDialog.showModal();
+    llmText.focus();
+  } catch {
+    showEditorStatus("Could not load the prompt generator.", true);
+  }
+});
+
+byId("close-llm-dialog").addEventListener("click", () => llmDialog.close());
+llmDialog.querySelector("form").addEventListener("submit", async event => {
+  event.preventDefault();
+  try {
+    await navigator.clipboard.writeText(llmText.value);
+    llmStatus("Prompt copied.");
+  } catch {
+    llmText.select();
+    llmStatus("The prompt is selected. Press Ctrl+C or Command+C to copy it.");
+  }
+});
 
 function reportFilters() {
   return {
@@ -539,7 +586,7 @@ function startTimer(job, milliseconds) {
 
 function getWorker() {
   if (worker) return worker;
-  const engine = new Worker("worker.js?v=report-ui");
+  const engine = new Worker("worker.js?v=llm-docx-only");
   worker = engine;
   engine.onmessage = ({ data }) => {
     if (worker !== engine) return;

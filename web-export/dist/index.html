@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
   <title>Export reports · ViRVIG</title>
-  <link rel="stylesheet" href="style.css?v=template-panel">
-  <script src="app.js?v=template-panel" defer></script>
+  <link rel="stylesheet" href="style.css?v=llm-template">
+  <script src="app.js?v=llm-docx-only" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -82,6 +82,9 @@
               <button id="edit-template-copy" type="button" class="secondary" hidden>Edit a copy</button>
             </div>
             <button id="create-template" class="secondary create-template" type="button">Create a new template with a visual editor</button>
+            <div class="actions template-actions">
+              <button id="generate-template-prompt" class="secondary" type="button" disabled>Generate a template with an LLM</button>
+            </div>
           </fieldset>
           <p id="editor-status" class="document-note" role="status" hidden></p>
           <div id="visual-template" hidden>
@@ -140,7 +143,20 @@
       </section>
     </form>
   </main>
-  <dialog id="app-dialog" aria-labelledby="dialog-title">
+  <dialog id="llm-dialog" class="template-dialog" aria-labelledby="llm-dialog-title">
+    <form>
+      <h2 id="llm-dialog-title">Generate a template with an LLM</h2>
+      <p id="llm-dialog-help">Copy the prompt and add a layout example or screenshot in your LLM. Upload the resulting DOCX through Use my own template… and choose Edit a copy.</p>
+      <label class="label" for="llm-template-text">Prompt</label>
+      <textarea id="llm-template-text" aria-describedby="llm-dialog-help" spellcheck="false" readonly></textarea>
+      <p id="llm-dialog-status" class="document-note" role="status" hidden></p>
+      <div class="actions dialog-actions">
+        <button id="close-llm-dialog" class="secondary" type="button">Close</button>
+        <button type="submit">Copy prompt</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="app-dialog" class="template-dialog" aria-labelledby="dialog-title">
     <form method="dialog">
       <h2 id="dialog-title"></h2>
       <div id="dialog-fields"></div>

@@ -82,9 +82,12 @@ button:disabled { opacity: .65; cursor: wait; }
 .template-actions { margin-top: 10px; }
 .template-actions:not(:has(> :not([hidden]))) { display: none; }
 code { color: #24445c; overflow-wrap: anywhere; }
-#app-dialog { width: min(460px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--border); border-radius: 16px; color: inherit; box-shadow: 0 20px 60px #102d4340; }
-#app-dialog::backdrop { background: #142b4366; }
-#app-dialog h2 { margin-bottom: 16px; }
+.template-dialog { width: min(460px, calc(100% - 32px)); padding: 24px; border: 1px solid var(--border); border-radius: 16px; color: inherit; box-shadow: 0 20px 60px #102d4340; }
+.template-dialog::backdrop { background: #142b4366; }
+.template-dialog h2 { margin-bottom: 16px; }
+#llm-dialog { width: min(760px, calc(100% - 32px)); }
+#llm-dialog .label, #llm-dialog-status { margin-top: 12px; }
+#llm-template-text { display: block; width: 100%; height: min(45vh, 420px); resize: vertical; padding: 10px; border: 1px solid var(--border); border-radius: 8px; color: inherit; font: .875rem/1.45 ui-monospace, monospace; }
 .dialog-actions { justify-content: flex-end; margin-top: 18px; }
 @media (max-width: 1050px) {
   .switch { grid-template-columns: repeat(3, minmax(0, 1fr)); }
