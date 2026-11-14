@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
   <title>Export reports · ViRVIG</title>
-  <link rel="stylesheet" href="style.css?v=template-actions">
-  <script src="app.js?v=template-actions" defer></script>
+  <link rel="stylesheet" href="style.css?v=template-panel">
+  <script src="app.js?v=template-panel" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -62,27 +62,27 @@
                 <small id="participants-hint">Enter author last names separated by commas.</small>
               </div>
             </fieldset>
-            <div>
-              <label class="label" for="template">Word template</label>
-              <select id="template" disabled><option>Loading templates…</option></select>
-              <small id="catalog-status" role="status" hidden></small>
-              <div id="custom-field" class="custom" hidden>
-                <label class="sr-only" for="custom-template">Select your DOCX template</label>
-                <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-              </div>
-              <button id="create-template" class="secondary create-template" type="button">Create a new template with a visual editor</button>
-            </div>
           </fieldset>
         <noscript>Enable JavaScript to generate reports in your browser.</noscript>
       </section>
       <div class="document-panels">
         <section class="panel" aria-labelledby="template-title">
           <h2 id="template-title">Template</h2>
-          <p id="template-name" class="document-note">Loading templates…</p>
-          <div class="actions template-actions">
-            <a id="template-download" class="button secondary" download hidden>Download template</a>
-            <button id="edit-template-copy" type="button" class="secondary" hidden>Edit a copy</button>
-          </div>
+          <fieldset id="template-settings">
+            <legend class="sr-only">Template settings</legend>
+            <label class="label" for="template">Word template</label>
+            <select id="template" disabled><option>Loading templates…</option></select>
+            <small id="catalog-status" role="status" hidden></small>
+            <div id="custom-field" class="custom" hidden>
+              <label class="sr-only" for="custom-template">Select your DOCX template</label>
+              <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+            </div>
+            <div class="actions template-actions">
+              <a id="template-download" class="button secondary" download hidden>Download template</a>
+              <button id="edit-template-copy" type="button" class="secondary" hidden>Edit a copy</button>
+            </div>
+            <button id="create-template" class="secondary create-template" type="button">Create a new template with a visual editor</button>
+          </fieldset>
           <p id="editor-status" class="document-note" role="status" hidden></p>
           <div id="visual-template" hidden>
             <fieldset id="editor-toolbar" class="editor-toolbar" aria-label="Template editor controls">

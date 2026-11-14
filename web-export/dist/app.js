@@ -1,6 +1,7 @@
 const byId = (id) => document.getElementById(id);
 const form = byId("export-form");
 const fields = byId("form-fields");
+const templateSettings = byId("template-settings");
 const yearFilters = byId("year-filters");
 const template = byId("template");
 const templateDownload = byId("template-download");
@@ -193,14 +194,14 @@ async function openVisualEditor(data) {
       showDialog,
       content: data.draft?.document,
       onChange: () => {
-        byId("template-name").textContent = "Edited template";
+        template.querySelector('option[value="visual"]').textContent = "Edited template";
         clearDownload();
         showStatus("");
         schedulePreview();
       },
     });
     draftSaved = templatePayload();
-    template.add(new Option("Visual template draft", "visual"));
+    template.add(new Option(visualBase ? "Editable copy" : "Visual template draft", "visual"));
     template.value = "visual";
     updateTemplateSelection();
     clearDownload();
@@ -409,7 +410,8 @@ function updateOptions() {
   byId("participants-hint").textContent = `Enter ${role} last names separated by commas.`;
   if (catalog) {
     const options = catalog[kind] ?? [];
-    template.replaceChildren(...options.map(({ label, url }) => new Option(label, url)),
+    template.replaceChildren(...options.map(({ label, url }) =>
+      new Option(`${label} (${decodeURIComponent(url.split("/").at(-1))})`, url)),
       new Option("Use my own template…", "custom"));
     const message = byId("catalog-status");
     message.hidden = options.length > 0;
@@ -446,10 +448,6 @@ function updateTemplateSelection() {
   customTemplate.disabled = !custom;
   const selected = catalog?.[selectedKind()]?.find(({ url }) => url === template.value);
   const file = custom && customTemplate.files[0];
-  const templateName = selected ? `${selected.label} (${decodeURIComponent(selected.url.split("/").at(-1))})` : file?.name;
-  byId("template-name").textContent = visual ? (visualBase ? "Editable copy" : "Visual template draft")
-    : templateName ? `Selected template: ${templateName}`
-      : custom ? "Choose a DOCX template." : "Loading templates…";
   if (templateDownload.href.startsWith("blob:")) URL.revokeObjectURL(templateDownload.href);
   templateDownload.hidden = !(selected || file);
   templateDownload.download = file ? file.name : "";
@@ -487,6 +485,7 @@ function showStatus(message, state = "progress") {
 
 function setBusy(busy) {
   fields.disabled = busy;
+  templateSettings.disabled = busy;
   chooseWorkbook.disabled = busy;
   byId("editor-toolbar").disabled = busy;
   byId("download-visual-template").disabled = busy || editorDownloadPending;
@@ -752,7 +751,7 @@ form.addEventListener("change", async ({ target }) => {
   }
   if (target === template || target === customTemplate) updateTemplateSelection();
   if (target.name === "kind" || target === template || target === customTemplate) inspectSelectedTemplate();
-  if (fields.contains(target) && !activeJob) {
+  if ((fields.contains(target) || templateSettings.contains(target)) && !activeJob) {
     clearDownload();
     showStatus("");
     schedulePreview();
