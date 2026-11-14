@@ -119,12 +119,11 @@ function showFieldReference(data) {
     context.textContent = "Could not load template fields.";
     return;
   }
-  const { collection, item, fields: available } = data.catalog;
+  const { collection, item, fields: available, yearLabel } = data.catalog;
   fieldCatalog = data.catalog;
   byId("generate-template-prompt").disabled = false;
-  context.textContent = `Loop over ${collection} as ${item}.${item === "pub"
-    ? " Use groups to group by year and pub.excel to access original Excel columns." : ""}`;
-  const items = Object.entries(available).filter(([name]) => !name.startsWith("pub.excel[")).map(([name, info]) => {
+  context.textContent = `Loop over ${collection} as ${item}. Use groups and group.${collection} to group by ${yearLabel}. Use ${item}.raw_cell with the original column header to access raw values.`;
+  const items = Object.entries(available).map(([name, info]) => {
     const item = document.createElement("li");
     const code = document.createElement("code");
     code.textContent = `{{${info.rich ? "r" : ""} ${name} }}`;
@@ -174,7 +173,7 @@ function requestEditorFields() {
 }
 
 function loadEditorModule() {
-  editorModule ??= import("./template-editor.js?v=report-ui").catch(error => {
+  editorModule ??= import("./template-editor.js?v=all-fields").catch(error => {
     editorModule = undefined;
     throw error;
   });
@@ -237,7 +236,7 @@ byId("generate-template-prompt").addEventListener("click", async () => {
   const fields = fieldCatalog;
   if (!fields) return;
   try {
-    const { templatePrompt } = await import("./template-prompt.js?v=llm-docx-only");
+    const { templatePrompt } = await import("./template-prompt.js?v=all-fields");
     if (kind !== selectedKind() || fields !== fieldCatalog || llmDialog.open || activeJob) return;
     const reportName = form.querySelector(`input[name="kind"][value="${kind}"] + span`).textContent;
     llmText.value = templatePrompt(kind, reportName, fields);
@@ -586,7 +585,7 @@ function startTimer(job, milliseconds) {
 
 function getWorker() {
   if (worker) return worker;
-  const engine = new Worker("worker.js?v=llm-docx-only");
+  const engine = new Worker("worker.js?v=all-fields");
   worker = engine;
   engine.onmessage = ({ data }) => {
     if (worker !== engine) return;

@@ -16,7 +16,7 @@ const Field = Node.create({
   renderHTML({ node, HTMLAttributes }) {
     return ["span", mergeAttributes(HTMLAttributes, {
       "data-template-field": "", class: "field-chip", title: node.attrs.expression,
-    }), node.attrs.label || node.attrs.expression];
+    }), node.attrs.expression];
   },
 });
 
@@ -71,6 +71,7 @@ const RepeatRow = TableRow.extend({
 
 function repeatVariables(collection, catalog) {
   if (collection === "groups") return ["group", "loop"];
+  if (collection === `${catalog.item}.display_fields`) return ["field", "loop"];
   return collection ? [catalog.item, "loop"] : [];
 }
 
@@ -175,14 +176,13 @@ export function createTemplateEditor({ element, toolbar, catalog, content, showD
 
   async function chooseCollection(title) {
     const scope = scopeAtCursor(editor, fields);
-    const options = [fields.collection];
-    if (fields.item === "pub") {
-      options.push("groups");
-      if (scope.has("group")) options.push("group.publications");
-    }
+    const groupedCollection = `group.${fields.collection}`;
+    const options = [fields.collection, "groups"];
+    if (scope.has("group")) options.push(groupedCollection);
+    if (scope.has(fields.item)) options.push(`${fields.item}.display_fields`);
     const result = await showDialog({
       title, inputs: [{ label: "Collection", options,
-        value: scope.has("group") ? "group.publications" : fields.collection }],
+        value: scope.has("group") ? groupedCollection : fields.collection }],
     });
     return editor.isDestroyed ? null : result?.[0];
   }

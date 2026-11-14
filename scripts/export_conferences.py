@@ -25,7 +25,7 @@ def read_conferences(path, first_year, last_year, teams, participants=""):
 
 def render(template, output, publications, *, jinja_env=None):
     export_publications.render(
-        template, output, publications, jinja_env=jinja_env, venue_field=VENUE,
+        template, output, publications, jinja_env=jinja_env, venue_field=VENUE, kind="conferences",
     )
 
 

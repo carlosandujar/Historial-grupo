@@ -119,17 +119,21 @@ For example, enter these as three separate Word paragraphs in a publication temp
 
 ### Template fields by report
 
-| Report | Default template under `templates/` | Jinja2 context |
+| Report | Default template under `templates/` | Template fields and examples |
 | --- | --- | --- |
 | Journal publications | `publicaciones/detallada.docx` | `publications` and `groups`. Each publication exposes all named columns in `Journals`, including `journal_title`, `journal_vol`, `quartile`, and `intranet`. |
 | Conference publications | `conferencias/detallada.docx` | `publications` and `groups`. Each publication exposes all named columns in `Conferences`, including `conference_proceedings`, `organization_entity`, `international`, and `internal_comments`. |
 | Defended theses | `tesis-defendidas/numeradas.docx` | `theses` with `author`, `title`, `supervisors`, `year`, and `team`. |
-| Theses in progress | `tesis-en-curso/numeradas.docx` | `theses` with `author`, `title`, `supervisors`, `enrollment`, and `team`. |
+| Theses in progress | `tesis-en-curso/numeradas.docx` | `theses` with `author`, `title`, `supervisors`, `enrollment`, `enrollment_year`, and `team`. |
 | International projects | `proyectos-internacionales/ficha.docx` | `projects` with the shared project fields below, plus `eu`. |
 | National projects | `proyectos-nacionales/ficha.docx` | `projects` with the shared project fields below, plus `aei`. |
-| Activities | `actividades/detallada.docx` | `activities` with `title`, `date`, `year`, `team`, `description`, `contacts`, and `activity_urls`. |
+| Activities | `actividades/detallada.docx` | `activities` with fields such as `title`, `date`, `year`, `time`, `team`, `description`, `contacts`, `activity_urls`, and `export`. |
 
-**Publication fields.** Both publication (journal and conference) exporters provide lowercase aliases with underscores for Excel column headers. For the original value, use `pub.excel['Column header']`. Each entry also provides `citation`, `doi_url`, `title_with_link`, and `doi_with_link`. For example, render a linked title with `{{r pub.title_with_link }}`. Each entry in `groups` contains `year` and `publications`. The publication lists are ordered newest year first, and both report types offer a `compacta.docx` template.
+**Worksheet fields.** Every report exposes all named worksheet columns, including control columns and notes. Use lowercase aliases with underscores, such as `thesis.month`. For the original cell value, use the exact header, as in `thesis.raw_cell['Month']`. This also lets you distinguish headers that produce the same alias. Display fields such as `project.amount_display` and `activity.date` are available alongside the raw values. Projects expose `team` and retain `team_ip` for existing templates.
+
+**Year groups.** Every report exposes its flat collection and `groups`. Each group contains `year` and the corresponding collection, such as `group.publications`, `group.theses`, `group.projects`, or `group.activities`. Groups use publication, defense, enrollment, project start, or activity year, depending on the report. They run newest first, with undated records in a final group where `group.year` is `None`. The flat collection keeps its existing order.
+
+**Publication fields.** Publications also provide `citation`, `doi_url`, `title_with_link`, and `doi_with_link`. For example, render a linked title with `{{r pub.title_with_link }}`. Existing templates can still use `pub.excel`. Both publication report types offer a `compacta.docx` template.
 
 **Thesis fields.** Both thesis exporters provide a list named `theses`. Each entry has `author`, `title`, `supervisors`, and `team`. Defended theses also expose `year`, while theses in progress expose `enrollment`. Use `{{ theses | length }}` to show the number of theses in the report.
 
@@ -141,7 +145,7 @@ This numbered example works with either thesis exporter. Put each line in a sepa
 {%p endfor %}
 ```
 
-**Project fields.** `reference`, `acronym`, `title`, `funding_entity`, `call`, `ips`, `ip_virvig_upc`, `text_es`, `team_ip`, `start`, `end`, `active`, `amount`, `amount_display`, `links`, `has_links`, and `link_text`. Render clickable project links with `{{r project.link_text }}`.
+**Project fields.** `reference`, `acronym`, `title`, `funding_entity`, `call`, `ips`, `ip_virvig_upc`, `text_es`, `team`, `team_ip`, `start`, `start_year`, `end`, `active`, `amount`, `amount_display`, `links`, `has_links`, and `link_text`. Render clickable project links with `{{r project.link_text }}`.
 
 
 
@@ -189,8 +193,22 @@ python scripts/check_conferences.py $workbook
 
 The checkers report the Excel row numbers for repeated DOIs and titles in `Journals` and `Conferences`, respectively. They compare titles across all years, ignore blank values and `?` DOI placeholders, and recognize DOI resolver URLs. An exit code of 1 means duplicates were found. The checkers open the workbook in read-only mode.
 
-[web-export]: http://www.cs.upc.edu/~virtual/VIRVIG/historial/
+[web-export]: https://carlosandujar.github.io/Historial-grupo/
 [drive-folder]: https://drive.google.com/drive/folders/17PWZjTBQ6FDlCk0JEbg4rYrnN-Cv4PkK?usp=drive_link
+
+## Adding columns to the workbook
+
+1. Add the column to the header row of the relevant worksheet and populate it. Use a unique header and keep existing headers in place.
+2. **Scripts.** Exporters automatically expose the new column to templates. Use a normalized field such as `thesis.review_status` or the exact Excel header as in `{{ thesis.raw_cell['Review status'] }}`. Update a Word template if you want the column to appear in a report. Change the relevant importer, checker, or exporter only if the column needs automatic population, validation, filtering, or special formatting.
+3. **Web-export.** Select the updated workbook. The new column appears automatically in the field reference, visual editor, and LLM prompt. Rebuild the app if you change an exporter or a built-in template. To include the column in the fictional preview shown before a workbook is selected, update `web-export/dist/sample_workbook.py`.
+
+## Adding a Word template
+
+Each report includes an **All fields** template (`all-fields.docx`). It shows each record title as a heading and lists the available fields on separate lines, including blank values. New named columns appear automatically. Use the template from the web dropdown or pass its path with `--template`.
+
+Create a `.docx` using the [Jinja2 fields for the report](#template-fields-by-report), or download a draft from the visual editor. Pass the file to the CLI exporter with `--template`, or select **Use my own template…** in web-export and upload it. Both options work without a rebuild.
+
+To share the template in the web dropdown, save it directly in the report's folder under `templates/`, for example `templates/tesis-defendidas/resumen.docx`. Run `python web-export/build.py` from the repository root. The build copies the file and updates the dropdown catalog. It derives the label from the filename unless the stem has a predefined label, such as **Detailed** for `detallada.docx`. The GitHub Pages workflow runs this build automatically on pushes to `main`.
 
 ## Updating the web-export app
 

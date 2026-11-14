@@ -12,7 +12,7 @@ const examples = {
   links: ["https://example.org"], link_text: "Enlace 1 (linked)", has_links: true, active: true, eu: true, aei: false,
 };
 
-export function templatePrompt(kind, reportName, { collection, item, fields }) {
+export function templatePrompt(kind, reportName, { collection, item, fields, yearLabel }) {
   const available = Object.entries(fields).map(([name, { label, rich }]) => {
     const key = name.slice(name.indexOf(".") + 1);
     const example = name === "loop.index" ? 1 : name.endsWith(" | length") ? 3
@@ -24,7 +24,8 @@ export function templatePrompt(kind, reportName, { collection, item, fields }) {
 Create and attach a downloadable .docx file containing the unrendered docxtpl template. Use real Word paragraphs, including one or more paragraphs per record. If my example uses a table, adapt it to labeled paragraphs. Use Word Normal and Heading 1–3 paragraph styles, with bold, italic, or underline applied to whole placeholders. Keep each Jinja tag intact in a single Word run. Use paragraph spacing and alignment for layout. Avoid tables, columns, page breaks, images, headers, footers, and custom character styles so the file can open in web-export’s visual editor.
 
 Data and scope
-Loop over ${collection} to access ${item}. Use loop.index inside a repeat. The collection itself is available outside the loop.${item === "pub" ? " For year groups, repeat groups, use group.year within that loop, and repeat group.publications inside it to access pub." : ""}
+Loop over ${collection} to access all matching records as ${item}. Use loop.index inside a repeat. To group by ${yearLabel}, repeat groups, use group.year as the heading, and repeat group.${collection} inside each group. A missing year is represented by None. Use ${item}.raw_cell with the exact Excel header for raw values.
+Inside a record loop, you can repeat ${item}.display_fields as field to list its fields dynamically. Inside that loop use field.label and field.value, rendering the value as RichText only if field.rich is true.
 The available fields are listed below. Example values are fictional. For fields without an example, use the field only when its meaning is clear.
 ${available}
 
