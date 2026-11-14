@@ -10,6 +10,10 @@ Web-export generates Word reports from the ViRVIG history workbook in your brows
 
 Team and participant filters are optional for every report. Where year filters are available, you can leave either bound blank. In particular, journal and conference reports allow blank teams and years in the browser. Their CLI commands require a team and both year bounds.
 
+## Live preview
+
+The read-only preview starts with fictional records. After you choose a workbook, it shows up to five records that match the current filters. It updates when you change the report type, filters, or template, including uploaded DOCX templates. The full report includes all matching records. Browser pagination can differ from Word.
+
 ## Built-in template catalog
 
 The selector lists the built-in templates for the selected report type. The link below it downloads the selected built-in template. Choose **Use my own template…** to upload a DOCX instead. The build generates `dist/templates/catalogo.json` by scanning the repository's top-level `templates/` directory, with a subfolder for each report type. To add a built-in template, put the DOCX in its report's subfolder and rebuild. Its filename determines the label in the app.

@@ -10,6 +10,7 @@ web = Path(__file__).resolve().parent
 root = web.parent
 dist = web / "dist"
 files = (
+    "report_workbook.py",
     "workbook_cli.py",
     "participant_filter.py",
     "export_publications.py",

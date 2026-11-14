@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
   <title>Export reports · ViRVIG</title>
-  <link rel="stylesheet" href="style.css?v=template-download">
-  <script src="app.js?v=template-download" defer></script>
+  <link rel="stylesheet" href="style.css?v=live-preview">
+  <script src="app.js?v=live-preview" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -17,10 +17,18 @@
       <h1>Export reports</h1>
       <p>Generate a Word report on the group's publications, activities, theses, or projects.</p>
     </div>
-    <div class="layout">
+    <form id="export-form" class="workflow">
+      <section class="panel" aria-labelledby="workbook-title">
+        <h2 id="workbook-title">Workbook</h2>
+        <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+        <div class="workbook-selection">
+          <button id="choose-workbook" class="secondary" type="button">Choose workbook</button>
+          <span id="workbook-name">No workbook selected</span>
+        </div>
+        <small id="workbook-status" role="status" hidden></small>
+      </section>
       <section class="panel export" aria-labelledby="export-title">
         <h2 id="export-title">Report settings</h2>
-        <form id="export-form">
           <fieldset id="form-fields">
             <legend class="sr-only">Export settings</legend>
             <div class="field">
@@ -34,21 +42,8 @@
                 <label><input type="radio" name="kind" value="projects"><span>International projects</span></label>
                 <label><input type="radio" name="kind" value="national"><span>National projects</span></label>
               </div>
-            </div>
-            <div class="field">
-              <label class="label" for="workbook">Excel workbook</label>
-              <input id="workbook" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required aria-describedby="sheet-hint">
               <small id="sheet-hint">This report uses the Journals worksheet.</small>
-            </div>
-            <div class="field">
-              <label class="label" for="template">Word template</label>
-              <select id="template" disabled><option>Loading templates…</option></select>
-              <small id="catalog-status" role="status" hidden></small>
-              <a id="template-download" download hidden></a>
-              <div id="custom-field" class="custom" hidden>
-                <label class="sr-only" for="custom-template">Select your DOCX template</label>
-                <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-              </div>
+              <small id="sheet-error" class="field-error" role="status" hidden></small>
             </div>
             <fieldset id="filters" aria-label="Report filters">
               <fieldset id="year-filters" aria-label="Year range">
@@ -69,19 +64,23 @@
                 <small id="participants-hint">Enter author last names separated by commas.</small>
               </div>
             </fieldset>
+            <div>
+              <label class="label" for="template">Word template</label>
+              <select id="template" disabled><option>Loading templates…</option></select>
+              <small id="catalog-status" role="status" hidden></small>
+              <div id="custom-field" class="custom" hidden>
+                <label class="sr-only" for="custom-template">Select your DOCX template</label>
+                <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+              </div>
+            </div>
           </fieldset>
-          <div class="actions">
-            <button id="generate" type="submit" disabled>Generate Word report</button>
-            <button id="cancel" class="secondary" type="button" hidden>Cancel</button>
-            <a id="download" class="button secondary" hidden>Download Word report</a>
-          </div>
-          <p id="status" class="status" role="status" aria-live="polite" hidden></p>
-        </form>
         <noscript>Enable JavaScript to generate reports in your browser.</noscript>
       </section>
-      <aside class="sidebar" aria-label="Template help">
-        <section class="panel" aria-labelledby="library-title">
-          <h2 id="library-title">Template help</h2>
+      <div class="document-panels">
+        <section class="panel" aria-labelledby="template-title">
+          <h2 id="template-title">Template</h2>
+          <p id="template-name" class="document-note">Loading templates…</p>
+          <a id="template-download" download hidden></a>
           <details>
             <summary>Template fields</summary>
             <p><strong>Journal and conference publications</strong> · Loop over <code>publications</code> for a flat list or <code>groups</code> to group by year. Each <code>pub</code> includes every named column in its worksheet. Use <code>{{ pub.journal_title }}</code> for journals or <code>{{ pub.conference_proceedings }}</code> for conferences. Access the original value by header, for example <code>{{ pub.excel['Conference proceedings'] }}</code>.</p>
@@ -93,9 +92,23 @@
             <p>Keep each Jinja tag intact when editing the template. You can change the styles and the surrounding text.</p>
           </details>
         </section>
+        <section class="panel" aria-labelledby="preview-title">
+          <h2 id="preview-title">Preview</h2>
+          <p id="preview-status" class="document-note" role="status"></p>
+          <iframe id="preview-document" class="preview-document" title="Read-only Word report preview" sandbox hidden></iframe>
+        </section>
+      </div>
+      <section class="panel" aria-labelledby="output-title">
+        <h2 id="output-title">Report output</h2>
+        <div class="actions">
+          <button id="generate" type="submit" disabled>Generate Word report</button>
+          <button id="cancel" class="secondary" type="button" hidden>Cancel</button>
+          <a id="download" class="button secondary" hidden>Download Word report</a>
+        </div>
+        <p id="status" class="status" role="status" hidden></p>
         <p class="privacy"><strong>Local processing</strong><br>Your browser reads the workbook and template. An internet connection is needed to load Python and its dependencies.</p>
-      </aside>
-    </div>
+      </section>
+    </form>
   </main>
 </body>
 </html>

@@ -6,6 +6,7 @@ const template = byId("template");
 const templateDownload = byId("template-download");
 const customTemplate = byId("custom-template");
 const workbook = byId("workbook");
+const chooseWorkbook = byId("choose-workbook");
 const download = byId("download");
 const status = byId("status");
 const cancel = byId("cancel");
@@ -39,6 +40,159 @@ let catalogFailed = false;
 let worker;
 let activeJob;
 let downloadURL;
+let workbookFile;
+let workbookSheets;
+let inspection = 0;
+let inspectionTimer;
+let workerWorkbook;
+let previewJob;
+let previewTimer;
+let previewRevision = 0;
+let previewPending = false;
+let previewLibrary;
+
+function reportFilters() {
+  return {
+    kind: selectedKind(),
+    fromYear: yearFilters.disabled ? null : byId("from-year").valueAsNumber || null,
+    toYear: yearFilters.disabled ? null : byId("to-year").valueAsNumber || null,
+    teams: byId("teams").value,
+    participants: byId("participants").value,
+  };
+}
+
+async function readTemplate() {
+  if (template.value === "custom") return customTemplate.files[0].arrayBuffer();
+  const response = await fetch(template.value, { cache: "no-cache", signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) throw new Error("The built-in template could not be found.");
+  return response.arrayBuffer();
+}
+
+function showPreviewStatus(message, error = false) {
+  const notice = byId("preview-status");
+  notice.textContent = message;
+  notice.classList.toggle("field-error", error);
+}
+
+function schedulePreview() {
+  previewRevision++;
+  previewPending = true;
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(runPreview, 350);
+}
+
+async function runPreview() {
+  if (!previewPending || activeJob || previewJob) return;
+  previewPending = false;
+  const filters = reportFilters();
+  const sample = !workbookFile;
+  const frame = byId("preview-document");
+  const sheet = reportTypes[filters.kind].sheet;
+  let waitMessage = "";
+  if (template.disabled) waitMessage = "Loading templates…";
+  else if (template.value === "custom" && !/\.docx$/i.test(customTemplate.files[0]?.name ?? "")) {
+    waitMessage = "Choose a DOCX template to see a preview.";
+  } else if (!sample && !workbookSheets?.includes(sheet)) {
+    waitMessage = workbookSheets ? "Choose a workbook with the required worksheet." : "Waiting for a valid workbook…";
+  } else if (!sample && filters.fromYear && filters.toYear && filters.fromYear > filters.toYear) {
+    waitMessage = "The start year must be on or before the end year.";
+  }
+  if (waitMessage) {
+    frame.hidden = true;
+    frame.removeAttribute("srcdoc");
+    showPreviewStatus(waitMessage);
+    return;
+  }
+
+  const job = { revision: previewRevision, sample };
+  previewJob = job;
+  showPreviewStatus(frame.hidden ? "Preparing preview…" : "Updating preview…");
+  job.timer = setTimeout(() => {
+    if (previewJob !== job) return;
+    if (job.usingWorker) resetWorker();
+    finishPreview(job, "Preview timed out. Change a setting to retry.");
+  }, 120_000);
+  try {
+    const bytes = await readTemplate();
+    if (job !== previewJob || job.revision !== previewRevision || activeJob) return;
+    const engine = getWorker();
+    const workbookBytes = !sample && workerWorkbook !== workbookFile ? await workbookFile.arrayBuffer() : null;
+    if (job !== previewJob || job.revision !== previewRevision || activeJob || engine !== worker) return;
+    job.usingWorker = true;
+    job.workbook = sample ? undefined : workbookFile;
+    job.workerDone = new Promise(resolve => { job.releaseWorker = resolve; });
+    engine.postMessage({ ...filters, preview: true, sample, template: bytes, workbook: workbookBytes },
+      workbookBytes ? [bytes, workbookBytes] : [bytes]);
+  } catch (error) {
+    finishPreview(job, error.message);
+  } finally {
+    if (previewJob === job && !job.usingWorker) finishPreview(job);
+  }
+}
+
+function loadPreviewLibrary() {
+  previewLibrary ??= (async () => {
+    for (const url of [
+      "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js",
+      "https://cdn.jsdelivr.net/npm/docx-preview@0.3.6/dist/docx-preview.min.js",
+    ]) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = url;
+        script.onload = resolve;
+        script.onerror = () => {
+          script.remove();
+          reject(new Error("Could not load the Word preview viewer."));
+        };
+        document.head.append(script);
+      });
+    }
+  })().catch(error => {
+    previewLibrary = undefined;
+    throw error;
+  });
+  return previewLibrary;
+}
+
+async function displayPreview(job, data) {
+  try {
+    if (job.revision !== previewRevision) return;
+    if (data.error) throw new Error(data.error);
+    await loadPreviewLibrary();
+    const content = document.createElement("div");
+    await globalThis.docx.renderAsync(data.document, content, null, {
+      ignoreWidth: true, ignoreHeight: true, useBase64URL: true, renderAltChunks: false,
+    });
+    if (previewJob !== job || job.revision !== previewRevision) return;
+    const frame = byId("preview-document");
+    frame.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:">
+      ${content.innerHTML}`;
+    frame.hidden = false;
+    showPreviewStatus(job.sample ? `Sample data · ${data.shown} example records`
+      : data.count ? `Showing ${data.shown} of ${data.count} matching records`
+      : "No records match the current filters.");
+  } catch (error) {
+    finishPreview(job, error.message);
+  } finally {
+    finishPreview(job);
+  }
+}
+
+function finishPreview(job, error) {
+  if (job !== previewJob) return;
+  clearTimeout(job.timer);
+  job.releaseWorker?.();
+  previewJob = undefined;
+  if (error && job.revision === previewRevision) {
+    const previous = byId("preview-document").hidden ? "" : " Showing the previous preview.";
+    showPreviewStatus(`Could not update the preview. ${error}${previous}`, true);
+  }
+  if (previewPending) {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(runPreview, 350);
+  }
+}
 
 function selectedKind() {
   return form.elements.kind.value;
@@ -65,6 +219,7 @@ function updateOptions() {
       : "No built-in templates are available for this report. You can use your own DOCX template.";
   }
   updateTemplateSelection();
+  updateSheetStatus();
 }
 
 async function loadCatalog() {
@@ -78,7 +233,8 @@ async function loadCatalog() {
   }
   updateOptions();
   template.disabled = false;
-  byId("generate").disabled = false;
+  updateSheetStatus();
+  schedulePreview();
 }
 
 function updateTemplateSelection() {
@@ -87,6 +243,9 @@ function updateTemplateSelection() {
   customTemplate.required = custom;
   customTemplate.disabled = !custom;
   const selected = catalog?.[selectedKind()]?.find(({ url }) => url === template.value);
+  byId("template-name").textContent = selected?.label ?? (custom
+    ? customTemplate.files[0]?.name ?? "Choose a DOCX template."
+    : "Loading templates…");
   templateDownload.hidden = !selected;
   if (selected) {
     templateDownload.href = selected.url;
@@ -97,6 +256,22 @@ function updateTemplateSelection() {
   }
 }
 
+function updateSheetStatus() {
+  const sheet = reportTypes[selectedKind()].sheet;
+  const missing = workbookSheets && !workbookSheets.includes(sheet);
+  const error = byId("sheet-error");
+  error.hidden = !missing;
+  error.textContent = missing ? `The workbook does not contain the “${sheet}” worksheet.` : "";
+  byId("generate").disabled = Boolean(activeJob || template.disabled || !workbookSheets || missing);
+}
+
+function showWorkbookStatus(message, isError = false) {
+  const notice = byId("workbook-status");
+  notice.hidden = !message;
+  notice.textContent = message;
+  notice.classList.toggle("field-error", isError);
+}
+
 function showStatus(message, state = "progress") {
   status.textContent = message;
   status.dataset.state = state;
@@ -105,7 +280,8 @@ function showStatus(message, state = "progress") {
 
 function setBusy(busy) {
   fields.disabled = busy;
-  byId("generate").disabled = busy;
+  chooseWorkbook.disabled = busy;
+  updateSheetStatus();
   cancel.hidden = !busy;
 }
 
@@ -120,11 +296,21 @@ function finish() {
   clearTimeout(activeJob?.timer);
   activeJob = undefined;
   setBusy(false);
+  if (previewPending) schedulePreview();
+}
+
+function resetWorker() {
+  worker?.terminate();
+  worker = undefined;
+  workerWorkbook = undefined;
 }
 
 function stop(message, state) {
-  worker?.terminate();
-  worker = undefined;
+  resetWorker();
+  if (previewJob?.usingWorker) {
+    finishPreview(previewJob);
+    previewPending = true;
+  }
   finish();
   showStatus(message, state);
 }
@@ -138,10 +324,34 @@ function startTimer(job, milliseconds) {
 
 function getWorker() {
   if (worker) return worker;
-  const engine = new Worker("worker.js");
+  const engine = new Worker("worker.js?v=live-preview");
   worker = engine;
   engine.onmessage = ({ data }) => {
-    if (worker !== engine || !activeJob) return;
+    if (worker !== engine) return;
+    if (data.inspection !== undefined) {
+      if (data.inspection !== inspection) return;
+      clearTimeout(inspectionTimer);
+      workbookSheets = data.sheets;
+      workerWorkbook = data.sheets ? workbookFile : undefined;
+      showWorkbookStatus(data.error
+        ? (data.setup ? "Could not start Python. Check your connection and choose the workbook again." : `Could not read the workbook. ${data.error}`)
+        : "", Boolean(data.error));
+      updateSheetStatus();
+      schedulePreview();
+      return;
+    }
+    if (data.preview) {
+      if (!previewJob || data.stage) return;
+      previewJob.usingWorker = false;
+      previewJob.releaseWorker?.();
+      if (!data.error && previewJob.workbook === workbookFile) workerWorkbook = previewJob.workbook;
+      displayPreview(previewJob, data);
+      return;
+    }
+    if (!activeJob) {
+      if (data.stage && workbookFile && !workbookSheets) showWorkbookStatus(data.stage);
+      return;
+    }
     if (data.stage) {
       showStatus(data.stage);
       if (data.rendering) startTimer(activeJob, 45_000);
@@ -155,6 +365,7 @@ function getWorker() {
       }
       return;
     }
+    workerWorkbook = workbookFile;
     downloadURL = URL.createObjectURL(new Blob([data.document], {
       type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }));
@@ -170,62 +381,116 @@ function getWorker() {
     showStatus(data.count ? `Report ready with ${data.count} ${noun}.` : "Report ready. No records match the selection.", "success");
   };
   engine.onerror = () => {
-    if (worker === engine && activeJob) stop("Python could not run in the browser. Reload the page and try again.", "error");
+    if (worker !== engine) return;
+    if (activeJob) {
+      if (previewJob) finishPreview(previewJob, "Python could not run in the browser.");
+      stop("Python could not run in the browser. Reload the page and try again.", "error");
+    }
+    else {
+      resetWorker();
+      if (previewJob) finishPreview(previewJob, "Python could not run in the browser.");
+      if (workbookFile && !workbookSheets) {
+        clearTimeout(inspectionTimer);
+        showWorkbookStatus("Could not read the workbook. Choose it again to retry.", true);
+      }
+    }
   };
   return engine;
 }
 
+chooseWorkbook.addEventListener("click", () => workbook.click());
+workbook.addEventListener("change", async () => {
+  const file = workbook.files[0];
+  workbook.value = "";
+  if (!file) return;
+  clearTimeout(inspectionTimer);
+  const request = ++inspection;
+  workbookFile = file;
+  workbookSheets = undefined;
+  byId("workbook-name").textContent = file.name;
+  chooseWorkbook.textContent = "Replace workbook";
+  clearDownload();
+  showStatus("");
+  updateSheetStatus();
+  schedulePreview();
+  if (!/\.xlsx$/i.test(file.name)) {
+    showWorkbookStatus("Select an .xlsx workbook.", true);
+    return;
+  }
+  showWorkbookStatus("Reading workbook…");
+  inspectionTimer = setTimeout(() => {
+    if (request !== inspection) return;
+    inspection++;
+    resetWorker();
+    if (previewJob) finishPreview(previewJob);
+    showWorkbookStatus("Reading the workbook timed out. Choose it again to retry.", true);
+  }, 150_000);
+  try {
+    const bytes = await file.arrayBuffer();
+    if (request !== inspection) return;
+    getWorker().postMessage({ inspect: true, inspection: request, workbook: bytes }, [bytes]);
+  } catch (error) {
+    if (request === inspection) {
+      clearTimeout(inspectionTimer);
+      showWorkbookStatus(`Could not read the workbook. ${error.message}`, true);
+    }
+  }
+});
+
 form.addEventListener("change", ({ target }) => {
   if (target.name === "kind") updateOptions();
-  if (target === template) updateTemplateSelection();
-});
-form.addEventListener("input", () => {
-  if (!activeJob) {
+  if (target === template || target === customTemplate) updateTemplateSelection();
+  if (target !== workbook && !activeJob) {
     clearDownload();
     showStatus("");
+    schedulePreview();
+  }
+});
+form.addEventListener("input", ({ target }) => {
+  if (!activeJob && target.type !== "file" && target.type !== "radio" && target !== template) {
+    clearDownload();
+    showStatus("");
+    schedulePreview();
   }
 });
 cancel.addEventListener("click", () => stop("Export canceled."));
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (activeJob) return;
+  if (activeJob || template.disabled || !workbookSheets?.includes(reportTypes[selectedKind()].sheet)) return;
   clearDownload();
-  const kind = selectedKind();
-  const fromYear = yearFilters.disabled ? null : byId("from-year").valueAsNumber || null;
-  const toYear = yearFilters.disabled ? null : byId("to-year").valueAsNumber || null;
+  const filters = reportFilters();
+  const { kind, fromYear, toYear } = filters;
   if (fromYear && toYear && fromYear > toYear) {
     showStatus("The start year must be on or before the end year.", "error");
     byId("from-year").focus();
     return;
   }
-  const input = workbook.files[0];
+  const input = workbookFile;
   const custom = template.value === "custom";
   const word = customTemplate.files[0];
   if (!input || !/\.xlsx$/i.test(input.name) || (custom && (!word || !/\.docx$/i.test(word.name)))) {
     showStatus("Select an .xlsx workbook and, if you use your own template, a .docx file.", "error");
     return;
   }
-  const teams = byId("teams").value;
-  const participants = byId("participants").value;
-  const selectedTemplate = template.value;
   const job = { kind, output: reportTypes[kind].output };
   activeJob = job;
   setBusy(true);
   showStatus("Preparing files…");
   startTimer(job, 150_000);
   try {
+    // The worker processes one document at a time. A queued export takes
+    // priority over the next automatic preview.
+    if (previewJob?.usingWorker) await previewJob.workerDone;
+    if (activeJob !== job) return;
     const [workbookBytes, templateBytes] = await Promise.all([
-      input.arrayBuffer(),
-      custom ? word.arrayBuffer() : fetch(selectedTemplate, { cache: "no-cache" }).then((response) => {
-        if (!response.ok) throw new Error("The built-in template could not be found.");
-        return response.arrayBuffer();
-      }),
+      workerWorkbook === input ? null : input.arrayBuffer(),
+      readTemplate(),
     ]);
     if (activeJob !== job) return;
     getWorker().postMessage({
-      kind, fromYear, toYear, teams, participants, workbook: workbookBytes, template: templateBytes,
-    }, [workbookBytes, templateBytes]);
+      ...filters, workbook: workbookBytes, template: templateBytes,
+    }, workbookBytes ? [workbookBytes, templateBytes] : [templateBytes]);
   } catch (error) {
     if (activeJob !== job) return;
     finish();

@@ -1,6 +1,6 @@
 const runtimeURL = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
 const pythonFiles = ["export_publications.py", "export_conferences.py", "export_activities.py", "export_phd_theses.py", "export_phd_in_progress.py", "export_projects_international.py",
-  "export_projects_national.py", "participant_filter.py", "workbook_cli.py", "bridge.py"];
+  "export_projects_national.py", "participant_filter.py", "workbook_cli.py", "report_workbook.py", "sample_workbook.py", "bridge.py"];
 let runtime;
 
 function reportError(error) {
@@ -47,16 +47,29 @@ self.onmessage = async ({ data }) => {
   try {
     runtime ??= boot();
     python = await runtime;
-    self.postMessage({ stage: "Reading the workbook and generating the report…", rendering: true });
-    python.FS.writeFile("input.xlsx", new Uint8Array(data.workbook));
+    if (data.inspect) {
+      python.FS.writeFile("input.xlsx", new Uint8Array(data.workbook));
+      bridge = python.pyimport("bridge");
+      self.postMessage({ inspection: data.inspection, sheets: JSON.parse(bridge.load_history()) });
+      return;
+    }
+    self.postMessage({ stage: data.preview ? "Rendering preview…" : "Generating the report…",
+      rendering: true, preview: data.preview });
+    if (data.workbook) {
+      python.FS.writeFile("input.xlsx", new Uint8Array(data.workbook));
+    }
     python.FS.writeFile("template.docx", new Uint8Array(data.template));
     bridge = python.pyimport("bridge");
+    if (data.workbook) bridge.load_history();
     // Pyodide maps undefined to None and null to JsNull.
-    const count = bridge.generate(data.kind, data.fromYear ?? undefined, data.toYear ?? undefined, data.teams, data.participants);
+    const counts = JSON.parse(bridge.generate.callKwargs(
+      data.kind, data.fromYear ?? undefined, data.toYear ?? undefined, data.teams, data.participants,
+      { preview: Boolean(data.preview), sample: Boolean(data.sample) },
+    ));
     const document = python.FS.readFile("output.docx").slice();
-    self.postMessage({ count, document: document.buffer }, [document.buffer]);
+    self.postMessage({ ...counts, preview: data.preview, document: document.buffer }, [document.buffer]);
   } catch (error) {
-    self.postMessage({ error: reportError(error), setup: !python });
+    self.postMessage({ error: reportError(error), setup: !python, inspection: data.inspection, preview: data.preview });
     if (!python) runtime = undefined;
   } finally {
     bridge?.destroy();

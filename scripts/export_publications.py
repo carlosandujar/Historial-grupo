@@ -10,8 +10,8 @@ from zipfile import BadZipFile
 
 from docxtpl import DocxTemplate, RichText
 from jinja2 import Environment, StrictUndefined, TemplateError
-from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+from report_workbook import open_report_workbook
 from workbook_cli import parse_workbook_args
 from participant_filter import matches_participants, participant_names
 
@@ -60,8 +60,7 @@ def read_publications(
     required=REQUIRED,
 ):
     selected = participant_names(participants)
-    workbook = load_workbook(path, read_only=True, data_only=True)
-    try:
+    with open_report_workbook(path) as workbook:
         if sheet_name not in workbook.sheetnames:
             raise ValueError(f"No se encontró la hoja {sheet_name}.")
         rows = workbook[sheet_name].values
@@ -87,8 +86,6 @@ def read_publications(
                 continue
             publications.append(row)
         return sorted(publications, key=publication_year, reverse=True)
-    finally:
-        workbook.close()
 
 
 def publication_year(row):

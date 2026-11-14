@@ -9,8 +9,8 @@ from zipfile import BadZipFile
 from docx.opc.exceptions import PackageNotFoundError
 from docxtpl import DocxTemplate, RichText
 from jinja2 import Environment, StrictUndefined, TemplateError
-from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+from report_workbook import open_report_workbook
 from workbook_cli import parse_workbook_args
 
 from export_publications import TEMPLATE_DIR, cell_text, team_names
@@ -48,8 +48,7 @@ def date_year(value):
 def read_projects(path, *, sheet=SHEET, text_fields=TEXT_FIELDS,
                   first_year=None, last_year=None, teams=None, participants=""):
     selected = participant_names(participants)
-    workbook = load_workbook(path, read_only=True, data_only=True)
-    try:
+    with open_report_workbook(path) as workbook:
         if sheet not in workbook.sheetnames:
             raise ValueError(f"No se encontró la hoja {sheet}.")
         rows = workbook[sheet].iter_rows()
@@ -98,8 +97,6 @@ def read_projects(path, *, sheet=SHEET, text_fields=TEXT_FIELDS,
             )
             projects.append(project)
         return projects
-    finally:
-        workbook.close()
 
 
 def render(template, output, projects, *, jinja_env=None):

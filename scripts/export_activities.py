@@ -9,8 +9,8 @@ from zipfile import BadZipFile
 from docx.opc.exceptions import PackageNotFoundError
 from docxtpl import DocxTemplate
 from jinja2 import Environment, StrictUndefined, TemplateError
-from openpyxl import load_workbook
 from openpyxl.utils.exceptions import InvalidFileException
+from report_workbook import open_report_workbook
 from workbook_cli import parse_workbook_args
 
 from export_publications import TEMPLATE_DIR, cell_text, team_names
@@ -24,8 +24,7 @@ EXPORT_VALUES = {"y", "yes", "s", "verdadero"}
 
 def read_activities(path, first_year=None, last_year=None, teams=(), participants=""):
     selected = participant_names(participants)
-    workbook = load_workbook(path, read_only=True, data_only=True)
-    try:
+    with open_report_workbook(path) as workbook:
         if SHEET not in workbook.sheetnames:
             raise ValueError(f"The workbook does not contain the {SHEET} worksheet.")
         rows = iter(workbook[SHEET].values)
@@ -75,8 +74,6 @@ def read_activities(path, first_year=None, last_year=None, teams=(), participant
             }
             activities.append((year or 0, day if isinstance(day, date) else date.min, activity))
         return [activity for _, _, activity in sorted(activities, key=lambda entry: entry[:2], reverse=True)]
-    finally:
-        workbook.close()
 
 
 def render(template, output, activities, *, jinja_env=None):
