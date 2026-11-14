@@ -1,6 +1,7 @@
 """Load the workbook, select records, and render reports in Pyodide."""
 
 import json
+from functools import partial
 from io import BytesIO
 from pathlib import Path
 
@@ -71,7 +72,7 @@ def select_rows(source, kind, first_year, last_year, teams, participants):
 renderers = {
     "journals": journals.render, "conferences": conferences.render, "activities": activities.render,
     "theses": theses.render, "progress": in_progress.render, "projects": projects.render,
-    "national": projects.render,
+    "national": partial(projects.render, kind="national"),
 }
 
 

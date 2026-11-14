@@ -1,58 +1,41 @@
-"""Field and loop scopes exposed by the existing report exporters."""
+"""Field and loop scopes for the visual editor and LLM prompt."""
 
 import json
-import re
 
+from report_context import REPORTS, field_alias, named_cells
 from sample_workbook import create_sample_workbook
 
 
-REPORTS = {
-    "journals": ("publications", "pub", "Journals"),
-    "conferences": ("publications", "pub", "Conferences"),
-    "activities": ("activities", "activity", "Activities"),
-    "theses": ("theses", "thesis", "PhD Theses"),
-    "progress": ("theses", "thesis", "PhD in progress"),
-    "projects": ("projects", "project", "Projects-international"),
-    "national": ("projects", "project", "Projects-national"),
-}
-PROJECT_FIELDS = (
-    "reference acronym title funding_entity call ips ip_virvig_upc text_es team_ip start end "
-    "active amount amount_display links has_links"
-)
-
-
 def editor_fields(kind, workbook=None):
-    collection, item, sheet = REPORTS[kind]
+    report = REPORTS[kind]
     fields = {}
 
     def add(name, label=None, rich=False):
-        fields[f"{item}.{name}"] = {"label": label or name.replace("_", " ").capitalize(), "rich": rich}
+        fields[f"{report.item}.{name}"] = {
+            "label": label or name.replace("_", " ").capitalize(), "rich": rich,
+        }
 
-    if item == "pub":
-        source = workbook if workbook is not None and sheet in workbook.sheetnames else create_sample_workbook()
-        headers = next(iter(source[sheet].values), ())
-        for header in headers:
-            header = " ".join(str(header or "").split())
-            if header:
-                alias = re.sub(r"\W+", "_", header.casefold()).strip("_")
-                if alias and alias.isidentifier():
-                    add(alias, header)
-                add("excel[" + json.dumps(header, ensure_ascii=False) + "]", header + " (Excel)")
-        for field in ("title", "authors", "citation", "doi_url"):
-            add(field)
-        add("title_with_link", "Linked title", True)
-        add("doi_with_link", "Linked DOI", True)
-        fields["group.year"] = {"label": "Group year", "rich": False}
-    else:
-        names = {
-            "activity": "title date year team description contacts activity_urls",
-            "thesis": "author title supervisors team " + ("year" if kind == "theses" else "enrollment"),
-            "project": PROJECT_FIELDS + (" eu" if kind == "projects" else " aei"),
-        }[item]
-        for name in names.split():
+    source = workbook if workbook is not None and report.sheet in workbook.sheetnames else create_sample_workbook()
+    headers = next(iter(source[report.sheet].values), ())
+    for header in named_cells(headers, [None] * len(headers)):
+        alias = field_alias(header)
+        if alias.isidentifier() and alias not in {"raw_cell", "display_fields"} and (report.item != "pub" or alias != "excel"):
+            fields.setdefault(f"{report.item}.{alias}", {"label": header, "rich": False})
+        add("raw_cell[" + json.dumps(header, ensure_ascii=False) + "]", header + " (raw cell value)")
+    for name in report.fields:
+        if f"{report.item}.{name}" not in fields:
             add(name)
-        if item == "project":
-            add("link_text", "Project links", True)
+    for name in report.rich_fields:
+        add(name, {"title_with_link": "Linked title", "doi_with_link": "Linked DOI", "link_text": "Project links"}[name], rich=True)
+    fields.update({
+        "field.label": {"label": "Display field label", "rich": False},
+        "field.value": {"label": "Display field value", "rich": False},
+        "field.rich": {"label": "Display field uses RichText", "rich": False},
+    })
+    fields["group.year"] = {"label": report.year_label.capitalize(), "rich": False}
     fields["loop.index"] = {"label": "Record number", "rich": False}
-    fields[collection + " | length"] = {"label": "Number of records", "rich": False}
-    return json.dumps({"collection": collection, "item": item, "fields": fields}, ensure_ascii=False)
+    fields[report.collection + " | length"] = {"label": "Number of records", "rich": False}
+    return json.dumps({
+        "collection": report.collection, "item": report.item, "fields": fields,
+        "yearLabel": report.year_label,
+    }, ensure_ascii=False)

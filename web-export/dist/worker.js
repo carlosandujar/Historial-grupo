@@ -1,6 +1,6 @@
 const runtimeURL = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
 const pythonFiles = ["export_publications.py", "export_conferences.py", "export_activities.py", "export_phd_theses.py", "export_phd_in_progress.py", "export_projects_international.py",
-  "export_projects_national.py", "participant_filter.py", "workbook_cli.py", "report_workbook.py",
+  "export_projects_national.py", "participant_filter.py", "workbook_cli.py", "report_workbook.py", "report_context.py",
   "sample_workbook.py", "template_fields.py", "template_docx.py", "template_import.py", "bridge.py"];
 let runtime;
 

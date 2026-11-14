@@ -9,9 +9,10 @@ from docx.opc.exceptions import PackageNotFoundError
 from jinja2 import TemplateError
 from openpyxl.utils.exceptions import InvalidFileException
 from report_workbook import open_report_workbook
+from report_context import date_year, named_cells, template_record
 from workbook_cli import parse_workbook_args
 
-from export_phd_theses import render
+from export_phd_theses import render as render_theses
 from export_publications import TEMPLATE_DIR, cell_text, team_names
 from participant_filter import matches_participants, participant_names
 
@@ -27,7 +28,8 @@ def read_theses(path, teams=None, participants=""):
         if SHEET not in workbook.sheetnames:
             raise ValueError(f"No se encontró la hoja {SHEET}.")
         rows = workbook[SHEET].values
-        headers = tuple(cell_text(value) for value in next(rows, ()))
+        source_headers = next(rows, ())
+        headers = tuple(cell_text(value) for value in source_headers)
         if any(headers.count(field) != 1 for field in ("Author", "Title", "Supervisors")):
             raise ValueError(f"{SHEET} debe tener las columnas Author, Title y Supervisors.")
         if teams and headers.count("Team") != 1:
@@ -46,8 +48,12 @@ def read_theses(path, teams=None, participants=""):
             thesis["enrollment"] = (
                 enrollment.strftime("%d/%m/%Y") if isinstance(enrollment, date) else cell_text(enrollment)
             )
-            theses.append(thesis)
+            theses.append(template_record(named_cells(source_headers, values), **thesis, enrollment_year=date_year(enrollment)))
         return theses
+
+
+def render(template, output, theses, *, jinja_env=None):
+    render_theses(template, output, theses, jinja_env=jinja_env, kind="progress")
 
 
 def main():

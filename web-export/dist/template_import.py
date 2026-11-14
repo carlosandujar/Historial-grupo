@@ -12,6 +12,7 @@ from docx.opc.packuri import PackURI
 from docx.opc.part import Part
 from docx.oxml.ns import qn
 from lxml import etree
+from report_context import REPORTS, loop_collections
 
 
 METADATA = "customXml/virvig-template.xml"
@@ -19,7 +20,8 @@ METADATA_TAG = "{urn:virvig:visual-template}template"
 VERSION = 1
 TAG = re.compile(r"(\{\{.*?\}\}|\{%.*?%\})", re.S)
 CONTROL = re.compile(r"(for|if|else|endif|endfor)(?:\s+(.+))?")
-LOOP = re.compile(r"(pub|group|activity|thesis|project) in (publications|groups|group\.publications|activities|theses|projects)")
+LOOP = re.compile(r"(\w+)\s+in\s+([\w.]+)")
+LOOP_VARIABLES = {key: value for report in REPORTS.values() for key, value in loop_collections(report).items()}
 
 
 def fingerprint(archive):
@@ -77,7 +79,7 @@ def control_node(source, kind):
     action, value = match.groups()
     if action == "for":
         loop = LOOP.fullmatch(value or "")
-        if not loop:
+        if not loop or LOOP_VARIABLES.get(loop[2]) != loop[1]:
             raise ValueError("This template repeats a collection the visual editor cannot represent.")
         value = loop[2]
         action = "repeat"

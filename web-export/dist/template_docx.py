@@ -12,7 +12,7 @@ from docx.oxml.ns import qn
 from docx.shared import Emu
 from jinja2 import StrictUndefined, meta
 from jinja2.sandbox import SandboxedEnvironment
-from template_fields import REPORTS
+from report_context import REPORTS, loop_collections
 from template_import import remove_visual_metadata, save_visual_template
 
 
@@ -53,7 +53,7 @@ def control_tag(attrs, scope, stack, collections):
     raise ValueError("A template control does not match its opening block.")
 
 
-def add_inline(paragraph, nodes, scope):
+def add_inline(paragraph, nodes, scope, collections):
     stack = []
     for index, node in enumerate(nodes):
         kind = node["type"]
@@ -62,10 +62,7 @@ def add_inline(paragraph, nodes, scope):
             paragraph.add_run().add_break()
             continue
         if kind == "inlineControl":
-            tag, scope = control_tag(attrs, scope, stack, {
-                "publications": "pub", "groups": "group", "group.publications": "pub",
-                "activities": "activity", "theses": "thesis", "projects": "project",
-            })
+            tag, scope = control_tag(attrs, scope, stack, collections)
             paragraph.add_run("{% " + tag + " %}")
             continue
         if kind == "field":
@@ -92,7 +89,7 @@ def add_inline(paragraph, nodes, scope):
         raise ValueError("Close each inline loop or condition within its paragraph.")
 
 
-def add_paragraph(target, node, scope, *, paragraph=None, style=None):
+def add_paragraph(target, node, scope, collections, *, paragraph=None, style=None):
     attrs = node.get("attrs", {})
     if node["type"] == "heading":
         style = f"Heading {attrs.get('level', 1)}"
@@ -107,17 +104,17 @@ def add_paragraph(target, node, scope, *, paragraph=None, style=None):
     if style or not properties or not attrs.get("useWordStyle", True):
         paragraph.style = style or "Normal"
     paragraph.alignment = ALIGNMENTS.get(attrs.get("textAlign"))
-    add_inline(paragraph, node.get("content", ()), scope)
+    add_inline(paragraph, node.get("content", ()), scope, collections)
 
 
-def add_list(target, node, scope, *, paragraph=None, level=0):
+def add_list(target, node, scope, collections, *, paragraph=None, level=0):
     style = "List Number" if node["type"] == "orderedList" else "List Bullet"
     for item in node.get("content", ()):
         for block in item.get("content", ()):
             if block["type"] in ("bulletList", "orderedList"):
-                add_list(target, block, scope, level=level + 1)
+                add_list(target, block, scope, collections, level=level + 1)
             else:
-                add_paragraph(target, block, scope, paragraph=paragraph, style=style + (f" {min(level + 1, 3)}" if level else ""))
+                add_paragraph(target, block, scope, collections, paragraph=paragraph, style=style + (f" {min(level + 1, 3)}" if level else ""))
                 paragraph = None
 
 
@@ -181,9 +178,9 @@ def add_table(document, node, scope, collections):
             for i, block in enumerate(node.get("content", ())):
                 first = cell.paragraphs[0] if i == 0 else None
                 if block["type"] in ("bulletList", "orderedList"):
-                    add_list(cell, block, row_scope, paragraph=first)
+                    add_list(cell, block, row_scope, collections, paragraph=first)
                 elif block["type"] in ("paragraph", "heading"):
-                    add_paragraph(cell, block, row_scope, paragraph=first)
+                    add_paragraph(cell, block, row_scope, collections, paragraph=first)
                 else:
                     raise ValueError("Table cells support text, headings, and lists.")
             if node["type"] == "tableHeader":
@@ -202,12 +199,9 @@ def repeat_scope(key, collections, scope):
 
 def build_template(payload, base=None, *, embed=False):
     data = json.loads(payload)
-    collection, item, _ = REPORTS[data["kind"]]
-    collections = {collection: item}
-    scope = {collection}
-    if collection == "publications":
-        collections.update({"groups": "group", "group.publications": "pub"})
-        scope.add("groups")
+    report = REPORTS[data["kind"]]
+    collections = loop_collections(report)
+    scope = {report.collection, "groups"}
     document = Document(base) if base else Document()
     if base:
         document.element.body.clear_content()
@@ -221,9 +215,9 @@ def build_template(payload, base=None, *, embed=False):
         elif kind == "table":
             add_table(document, node, scope, collections)
         elif kind in ("bulletList", "orderedList"):
-            add_list(document, node, scope)
+            add_list(document, node, scope, collections)
         elif kind in ("paragraph", "heading"):
-            add_paragraph(document, node, scope)
+            add_paragraph(document, node, scope, collections)
         else:
             raise ValueError(f"Unsupported template element: {kind}.")
     if stack:

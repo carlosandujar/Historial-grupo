@@ -11,6 +11,7 @@ from docxtpl import DocxTemplate
 from jinja2 import Environment, StrictUndefined, TemplateError
 from openpyxl.utils.exceptions import InvalidFileException
 from report_workbook import open_report_workbook
+from report_context import named_cells, report_context, template_record
 from workbook_cli import parse_workbook_args
 
 from export_publications import TEMPLATE_DIR, cell_text, team_names
@@ -28,7 +29,8 @@ def read_activities(path, first_year=None, last_year=None, teams=(), participant
         if SHEET not in workbook.sheetnames:
             raise ValueError(f"The workbook does not contain the {SHEET} worksheet.")
         rows = iter(workbook[SHEET].values)
-        headers = tuple(cell_text(value) for value in next(rows, ()))
+        source_headers = next(rows, ())
+        headers = tuple(cell_text(value) for value in source_headers)
         required = ("Title", "Date", "Year", "Export")
         if teams:
             required += ("Team",)
@@ -72,14 +74,15 @@ def read_activities(path, first_year=None, last_year=None, teams=(), participant
                 "contacts": contacts,
                 "activity_urls": str(row.get("Activity URLs") or "").strip(),
             }
-            activities.append((year or 0, day if isinstance(day, date) else date.min, activity))
+            entry = template_record(named_cells(source_headers, values), **activity)
+            activities.append((year or 0, day if isinstance(day, date) else date.min, entry))
         return [activity for _, _, activity in sorted(activities, key=lambda entry: entry[:2], reverse=True)]
 
 
 def render(template, output, activities, *, jinja_env=None):
     document = DocxTemplate(template)
     environment = jinja_env if jinja_env is not None else Environment(undefined=StrictUndefined)
-    document.render({"activities": activities}, jinja_env=environment, autoescape=True)
+    document.render(report_context("activities", activities), jinja_env=environment, autoescape=True)
     document.save(output)
 
 

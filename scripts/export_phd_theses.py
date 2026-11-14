@@ -9,6 +9,7 @@ from docxtpl import DocxTemplate
 from jinja2 import Environment, StrictUndefined, TemplateError
 from openpyxl.utils.exceptions import InvalidFileException
 from report_workbook import open_report_workbook
+from report_context import named_cells, report_context, template_record
 from workbook_cli import parse_workbook_args
 
 from export_publications import TEMPLATE_DIR, cell_text, team_names
@@ -26,7 +27,8 @@ def read_theses(path, first_year, last_year, teams, participants=""):
         if SHEET not in workbook.sheetnames:
             raise ValueError(f"No se encontró la hoja {SHEET}.")
         rows = workbook[SHEET].values
-        headers = tuple(cell_text(value) for value in next(rows, ()))
+        source_headers = next(rows, ())
+        headers = tuple(cell_text(value) for value in source_headers)
         required = (*FIELDS, "Team") if teams else FIELDS
         if any(headers.count(field) != 1 for field in required):
             raise ValueError(f"{SHEET} debe tener una columna de cada tipo: {', '.join(required)}.")
@@ -49,14 +51,14 @@ def read_theses(path, first_year, last_year, teams, participants=""):
             if not matches_participants(row["Supervisors"], selected):
                 continue
             thesis["year"] = year
-            theses.append(thesis)
+            theses.append(template_record(named_cells(source_headers, values), **thesis))
         return sorted(theses, key=lambda thesis: thesis["year"] or 0, reverse=True)
 
 
-def render(template, output, theses, *, jinja_env=None):
+def render(template, output, theses, *, jinja_env=None, kind="theses"):
     document = DocxTemplate(template)
     environment = jinja_env if jinja_env is not None else Environment(undefined=StrictUndefined, autoescape=True)
-    document.render({"theses": theses}, jinja_env=environment)
+    document.render(report_context(kind, theses), jinja_env=environment)
     document.save(output)
 
 

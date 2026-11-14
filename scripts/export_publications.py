@@ -2,7 +2,6 @@
 
 import argparse
 from datetime import date
-from itertools import groupby
 from pathlib import Path
 import re
 from urllib.parse import quote
@@ -12,6 +11,7 @@ from docxtpl import DocxTemplate, RichText
 from jinja2 import Environment, StrictUndefined, TemplateError
 from openpyxl.utils.exceptions import InvalidFileException
 from report_workbook import open_report_workbook
+from report_context import named_cells, report_context, template_record
 from workbook_cli import parse_workbook_args
 from participant_filter import matches_participants, participant_names
 
@@ -64,7 +64,8 @@ def read_publications(
         if sheet_name not in workbook.sheetnames:
             raise ValueError(f"No se encontró la hoja {sheet_name}.")
         rows = workbook[sheet_name].values
-        headers = tuple(cell_text(cell) for cell in next(rows, ()))
+        source_headers = next(rows, ())
+        headers = tuple(cell_text(cell) for cell in source_headers)
         if any(headers.count(field) != 1 for field in required):
             raise ValueError(f"{sheet_name} debe tener una columna de cada tipo: {', '.join(required)}.")
         named_headers = [header for header in headers if header]
@@ -84,8 +85,14 @@ def read_publications(
                 continue
             if not matches_participants(row["Authors"], selected):
                 continue
-            publications.append(row)
+            publications.append(PublicationRow(row, named_cells(source_headers, values)))
         return sorted(publications, key=publication_year, reverse=True)
+
+
+class PublicationRow(dict):
+    def __init__(self, row, raw_cell):
+        super().__init__(row)
+        self.raw_cell = raw_cell
 
 
 def publication_year(row):
@@ -108,12 +115,6 @@ def citation(row, *, venue_field="Journal title"):
 
 
 def template_publication(document, row, *, venue_field="Journal title"):
-    fields = {}
-    for header, value in row.items():
-        name = re.sub(r"\W+", "_", header.casefold()).strip("_")
-        if name:
-            fields.setdefault(name, value)
-
     title = cell_text(row["Title"])
     url = doi_url(row)
     legacy_title = RichText(title, bold=True)
@@ -123,25 +124,19 @@ def template_publication(document, row, *, venue_field="Journal title"):
         url_id = document.build_url_id(url)
         title_with_link = RichText(title, bold=True, color="23578C", underline=True, url_id=url_id)
         doi_with_link = RichText(url, color="23578C", underline=True, url_id=url_id)
-    fields.update(
-        excel=row, title=title, authors=cell_text(row["Authors"]),
+    return template_record(
+        getattr(row, "raw_cell", row), excel=row, title=title, authors=cell_text(row["Authors"]),
         citation=citation(row, venue_field=venue_field),
         doi_url=url, title_with_link=title_with_link, doi_with_link=doi_with_link,
         legacy_title=legacy_title, doi_link=doi_with_link,
     )
-    return fields
 
 
-def render(template, output, publications, *, jinja_env=None, venue_field="Journal title"):
+def render(template, output, publications, *, jinja_env=None, venue_field="Journal title", kind="journals"):
     document = PublicationTemplate(template)
-    groups = []
-    entries = []
-    for year, rows in groupby(publications, key=publication_year):
-        group = [template_publication(document, row, venue_field=venue_field) for row in rows]
-        groups.append({"year": year, "publications": group})
-        entries.extend(group)
+    entries = [template_publication(document, row, venue_field=venue_field) for row in publications]
     environment = jinja_env if jinja_env is not None else Environment(undefined=StrictUndefined)
-    document.render({"groups": groups, "publications": entries}, jinja_env=environment, autoescape=True)
+    document.render(report_context(kind, entries), jinja_env=environment, autoescape=True)
     document.save(output)
 
 

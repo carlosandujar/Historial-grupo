@@ -1,7 +1,7 @@
 """Exporta los proyectos internacionales del historial a una plantilla Word."""
 
 import argparse
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlsplit
 from zipfile import BadZipFile
@@ -11,6 +11,7 @@ from docxtpl import DocxTemplate, RichText
 from jinja2 import Environment, StrictUndefined, TemplateError
 from openpyxl.utils.exceptions import InvalidFileException
 from report_workbook import open_report_workbook
+from report_context import date_year, named_cells, report_context, template_record
 from workbook_cli import parse_workbook_args
 
 from export_publications import TEMPLATE_DIR, cell_text, team_names
@@ -31,20 +32,6 @@ def format_date(value):
     return value.strftime("%d/%m/%Y") if isinstance(value, date) else cell_text(value)
 
 
-def date_year(value):
-    if isinstance(value, date):
-        return value.year
-    text = cell_text(value)
-    if len(text) == 4 and text.isdecimal() and 1000 <= int(text) <= 9999:
-        return int(text)
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(text, fmt).year
-        except ValueError:
-            continue
-    return None
-
-
 def read_projects(path, *, sheet=SHEET, text_fields=TEXT_FIELDS,
                   first_year=None, last_year=None, teams=None, participants=""):
     selected = participant_names(participants)
@@ -52,7 +39,8 @@ def read_projects(path, *, sheet=SHEET, text_fields=TEXT_FIELDS,
         if sheet not in workbook.sheetnames:
             raise ValueError(f"No se encontró la hoja {sheet}.")
         rows = workbook[sheet].iter_rows()
-        headers = tuple(cell_text(cell.value).casefold() for cell in next(rows, ()))
+        source_headers = tuple(cell.value for cell in next(rows, ()))
+        headers = tuple(cell_text(header).casefold() for header in source_headers)
         if any(headers.count(field) != 1 for field in ("reference", "title")):
             raise ValueError(f"{sheet} debe tener las columnas Reference y Title.")
         team_header = "team" if "team" in headers else "team ip"
@@ -90,16 +78,16 @@ def read_projects(path, *, sheet=SHEET, text_fields=TEXT_FIELDS,
                 if "€" in (row["amount"].number_format or ""):
                     amount_display += " €"
             project.update(
-                team_ip=team, start=format_date(start), end=format_date(end),
+                team=team, team_ip=team, start=format_date(start), end=format_date(end), start_year=date_year(start),
                 active=values.get("active"), amount=amount, amount_display=amount_display,
                 links=[url for header in ("link", "link 2", "link 3")
                        if (url := cell_text(values.get(header)))],
             )
-            projects.append(project)
+            projects.append(template_record(named_cells(source_headers, (cell.value for cell in cells)), **project))
         return projects
 
 
-def render(template, output, projects, *, jinja_env=None):
+def render(template, output, projects, *, jinja_env=None, kind="projects"):
     document = DocxTemplate(template)
     entries = []
     for project in projects:
@@ -115,7 +103,7 @@ def render(template, output, projects, *, jinja_env=None):
             links.add(f"Enlace {count}", color="23578C", underline=True, url_id=document.build_url_id(url))
         entries.append({**project, "link_text": links, "has_links": count > 0})
     environment = jinja_env if jinja_env is not None else Environment(undefined=StrictUndefined, autoescape=True)
-    document.render({"projects": entries}, jinja_env=environment)
+    document.render(report_context(kind, entries), jinja_env=environment)
     document.save(output)
 
 
@@ -146,7 +134,7 @@ def export_cli(description, sheet, template, output, text_fields):
             args.workbook, sheet=sheet, text_fields=text_fields,
             first_year=args.from_year, last_year=args.to_year, teams=teams, participants=args.participants,
         )
-        render(args.template, args.output, projects)
+        render(args.template, args.output, projects, kind="projects" if sheet == SHEET else "national")
     except (OSError, ValueError, BadZipFile, InvalidFileException, PackageNotFoundError, TemplateError) as error:
         parser.exit(1, f"Error: {error}\n")
     print(f"{len(projects)} proyectos exportados a {args.output}")

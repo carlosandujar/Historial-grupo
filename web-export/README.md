@@ -16,6 +16,8 @@ The read-only preview starts with fictional records. After you choose a workbook
 
 ## Visual template editor
 
+The field picker and LLM prompt expose all named columns for the selected report. Choose a **raw cell value** field to access the value by its exact Excel header. The editor offers both the flat collection and year groups, using the project start year for project reports.
+
 Use **Generate a template with an LLM** to copy a prompt for the selected report. Add a layout example or screenshot in your preferred LLM and ask it to attach the paragraph-based DOCX template. Upload the file through **Use my own template…**, then choose **Edit a copy** to open it in the visual editor. The prompt includes field names and fictional examples. The app does not call the LLM or send workbook records.
 
 Select a report type and choose **Create visual template**. The draft starts with a repeat block and a title field. Put the cursor inside the block to see the fields available there. For a table, place the cursor in a data row and choose **Repeat row** to insert record fields in that row. **Expression** accepts Jinja expressions without braces and an optional inline condition. Close each **Repeat block** or **If block** with **End block**.
