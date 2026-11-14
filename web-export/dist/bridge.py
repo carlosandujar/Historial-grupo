@@ -18,6 +18,7 @@ import export_projects_national as national
 from sample_workbook import create_sample_workbook
 from template_docx import build_template
 from template_fields import editor_fields
+from template_import import import_visual_template
 
 
 workbook = None
@@ -28,6 +29,16 @@ selected_rows = None
 
 def template_fields(kind):
     return editor_fields(kind, workbook)
+
+
+def inspect_template(kind):
+    source = Path("template-source.docx").read_bytes()
+    draft = import_visual_template(source, kind)
+    build_template(json.dumps(draft), "template-source.docx")
+    # Check the final document syntax, including inline Word tags.
+    from docxtpl import DocxTemplate
+    DocxTemplate("template.docx").get_undeclared_template_variables()
+    return json.dumps(draft)
 
 
 def load_history():

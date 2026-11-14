@@ -1,7 +1,7 @@
 const runtimeURL = "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/";
 const pythonFiles = ["export_publications.py", "export_conferences.py", "export_activities.py", "export_phd_theses.py", "export_phd_in_progress.py", "export_projects_international.py",
   "export_projects_national.py", "participant_filter.py", "workbook_cli.py", "report_workbook.py",
-  "sample_workbook.py", "template_fields.py", "template_docx.py", "bridge.py"];
+  "sample_workbook.py", "template_fields.py", "template_docx.py", "template_import.py", "bridge.py"];
 let runtime;
 
 function reportError(error) {
@@ -53,8 +53,15 @@ self.onmessage = async ({ data }) => {
       if (data.editorRequest === "fields") {
         self.postMessage({ editorRequest: data.editorRequest, kind: data.kind,
           catalog: JSON.parse(bridge.template_fields(data.kind)) });
+      } else if (data.editorRequest === "open") {
+        python.FS.writeFile("template-source.docx", new Uint8Array(data.baseTemplate));
+        const draft = JSON.parse(bridge.inspect_template(data.kind));
+        self.postMessage({ editorRequest: data.editorRequest, kind: data.kind, request: data.request,
+          draft, catalog: JSON.parse(bridge.template_fields(data.kind)) });
       } else {
-        bridge.build_template(data.visualTemplate);
+        if (data.baseTemplate) python.FS.writeFile("template-source.docx", new Uint8Array(data.baseTemplate));
+        bridge.build_template.callKwargs(data.visualTemplate, data.baseTemplate ? "template-source.docx" : undefined,
+          { embed: true });
         const bytes = python.FS.readFile("template.docx").slice();
         self.postMessage({ editorRequest: data.editorRequest, kind: data.kind, document: bytes.buffer }, [bytes.buffer]);
       }
@@ -72,7 +79,10 @@ self.onmessage = async ({ data }) => {
       python.FS.writeFile("input.xlsx", new Uint8Array(data.workbook));
     }
     bridge = python.pyimport("bridge");
-    if (data.visualTemplate) bridge.build_template(data.visualTemplate);
+    if (data.visualTemplate) {
+      if (data.baseTemplate) python.FS.writeFile("template-source.docx", new Uint8Array(data.baseTemplate));
+      bridge.build_template(data.visualTemplate, data.baseTemplate ? "template-source.docx" : undefined);
+    }
     else python.FS.writeFile("template.docx", new Uint8Array(data.template));
     if (data.workbook) bridge.load_history();
     // Pyodide maps undefined to None and null to JsNull.
@@ -84,11 +94,11 @@ self.onmessage = async ({ data }) => {
     self.postMessage({ ...counts, preview: data.preview, document: document.buffer }, [document.buffer]);
   } catch (error) {
     self.postMessage({ error: reportError(error), setup: !python, inspection: data.inspection,
-      preview: data.preview, editorRequest: data.editorRequest, kind: data.kind });
+      preview: data.preview, editorRequest: data.editorRequest, kind: data.kind, request: data.request });
     if (!python) runtime = undefined;
   } finally {
     bridge?.destroy();
-    for (const path of ["input.xlsx", "template.docx", "output.docx"]) {
+    for (const path of ["input.xlsx", "template-source.docx", "template.docx", "output.docx"]) {
       if (python?.FS.analyzePath(path).exists) python.FS.unlink(path);
     }
   }

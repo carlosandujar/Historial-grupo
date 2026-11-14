@@ -18,7 +18,9 @@ The read-only preview starts with fictional records. After you choose a workbook
 
 Select a report type and choose **Create visual template**. The draft starts with a repeat block and a title field. Put the cursor inside the block to see the fields available there. For a table, place the cursor in a data row and choose **Repeat row** to insert record fields in that row. **Expression** accepts Jinja expressions without braces and an optional inline condition. Close each **Repeat block** or **If block** with **End block**.
 
-The preview and full report use the active draft. **Download template** saves a reusable DOCX with its Jinja tags. You can use that file as a Word template through **Use my own template…**. Visual editing currently starts from a new draft.
+The preview and full report use the active draft. **Download template** saves a reusable DOCX with its Jinja tags and editor data. To reopen it, select the same report type, upload it through **Use my own template…**, and choose **Edit a copy**. If the DOCX changes outside web-export, the app will flag the saved editor data as outdated.
+
+**Edit a copy** is also available for the built-in templates and supported Word-authored DOCX files. Word-authored files with unsupported features, such as tables or embedded images, can still be used for preview and export. The original stays available in the selector while you edit. Switching report types or replacing the draft prompts for confirmation if there are unsaved changes.
 
 To include the visual editor in a deployment, run `npm ci` and `npm run build` from `web-export`, alongside the [Python build](../readme.md#updating-the-web-export-app). The editor bundle is written to `dist/template-editor.js`.
 

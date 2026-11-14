@@ -7,11 +7,13 @@ import re
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml import OxmlElement
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import qn
 from docx.shared import Emu
 from jinja2 import StrictUndefined, meta
 from jinja2.sandbox import SandboxedEnvironment
 from template_fields import REPORTS
+from template_import import remove_visual_metadata, save_visual_template
 
 
 ENV = SandboxedEnvironment(undefined=StrictUndefined)
@@ -30,12 +32,41 @@ def expression(value, scope):
     return value
 
 
+def control_tag(attrs, scope, stack, collections):
+    action, value = attrs["action"], attrs.get("value", "")
+    if action == "repeat":
+        iterable, variable = repeat_scope(value, collections, scope)
+        stack.append(("repeat", scope, False))
+        return f"for {variable} in {iterable}", scope | {variable, "loop"}
+    if action == "if":
+        stack.append(("if", scope, False))
+        return "if " + expression(value, scope), scope
+    if action == "else" and stack and not stack[-1][2]:
+        block, previous, _ = stack[-1]
+        stack[-1] = (block, previous, True)
+        return "else", previous
+    if action == "end" and stack:
+        block, previous, _ = stack.pop()
+        tag = "endfor" if block == "repeat" else "endif"
+        if not value or value == tag:
+            return tag, previous
+    raise ValueError("A template control does not match its opening block.")
+
+
 def add_inline(paragraph, nodes, scope):
+    stack = []
     for index, node in enumerate(nodes):
         kind = node["type"]
         attrs = node.get("attrs", {})
         if kind == "hardBreak":
             paragraph.add_run().add_break()
+            continue
+        if kind == "inlineControl":
+            tag, scope = control_tag(attrs, scope, stack, {
+                "publications": "pub", "groups": "group", "group.publications": "pub",
+                "activities": "activity", "theses": "thesis", "projects": "project",
+            })
+            paragraph.add_run("{% " + tag + " %}")
             continue
         if kind == "field":
             value = expression(attrs["expression"], scope)
@@ -57,6 +88,8 @@ def add_inline(paragraph, nodes, scope):
         run.bold = True if "bold" in marks else None
         run.italic = True if "italic" in marks else None
         run.underline = True if "underline" in marks else None
+    if stack:
+        raise ValueError("Close each inline loop or condition within its paragraph.")
 
 
 def add_paragraph(target, node, scope, *, paragraph=None, style=None):
@@ -65,7 +98,14 @@ def add_paragraph(target, node, scope, *, paragraph=None, style=None):
         style = f"Heading {attrs.get('level', 1)}"
     if paragraph is None:
         paragraph = target.add_paragraph()
-    paragraph.style = style or "Normal"
+    properties = attrs.get("wordProperties")
+    if properties:
+        word_properties = parse_xml(properties.encode())
+        if word_properties.tag != qn("w:pPr"):
+            raise ValueError("Invalid paragraph properties in the visual template.")
+        paragraph._element.insert(0, word_properties)
+    if style or not properties or not attrs.get("useWordStyle", True):
+        paragraph.style = style or "Normal"
     paragraph.alignment = ALIGNMENTS.get(attrs.get("textAlign"))
     add_inline(paragraph, node.get("content", ()), scope)
 
@@ -160,7 +200,7 @@ def repeat_scope(key, collections, scope):
     return key, variable
 
 
-def build_template(payload):
+def build_template(payload, base=None, *, embed=False):
     data = json.loads(payload)
     collection, item, _ = REPORTS[data["kind"]]
     collections = {collection: item}
@@ -168,29 +208,15 @@ def build_template(payload):
     if collection == "publications":
         collections.update({"groups": "group", "group.publications": "pub"})
         scope.add("groups")
-    document = Document()
+    document = Document(base) if base else Document()
+    if base:
+        document.element.body.clear_content()
+        remove_visual_metadata(document)
     stack = []
     for node in data["document"].get("content", ()):
         kind = node["type"]
         if kind == "control":
-            attrs = node["attrs"]
-            action = attrs["action"]
-            if action == "repeat":
-                iterable, variable = repeat_scope(attrs["value"], collections, scope)
-                stack.append(("repeat", scope, False))
-                scope = scope | {variable, "loop"}
-                tag = f"for {variable} in {iterable}"
-            elif action == "if":
-                stack.append(("if", scope, False))
-                tag = "if " + expression(attrs["value"], scope)
-            elif action == "else" and stack and stack[-1][0] == "if" and not stack[-1][2]:
-                stack[-1] = ("if", stack[-1][1], True)
-                tag = "else"
-            elif action == "end" and stack:
-                block, scope, _ = stack.pop()
-                tag = "endfor" if block == "repeat" else "endif"
-            else:
-                raise ValueError("A template control does not match its opening block.")
+            tag, scope = control_tag(node["attrs"], scope, stack, collections)
             document.add_paragraph("{%p " + tag + " %}")
         elif kind == "table":
             add_table(document, node, scope, collections)
@@ -202,6 +228,9 @@ def build_template(payload):
             raise ValueError(f"Unsupported template element: {kind}.")
     if stack:
         raise ValueError("Close each repeat or condition with an End block.")
-    output = BytesIO()
-    document.save(output)
-    Path("template.docx").write_bytes(output.getvalue())
+    if embed:
+        Path("template.docx").write_bytes(save_visual_template(document, payload))
+    else:
+        output = BytesIO()
+        document.save(output)
+        Path("template.docx").write_bytes(output.getvalue())

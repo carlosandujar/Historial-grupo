@@ -1,4 +1,4 @@
-import { Editor, Node, mergeAttributes } from "@tiptap/core";
+import { Editor, Extension, Node, mergeAttributes } from "@tiptap/core";
 import { TableKit, TableRow } from "@tiptap/extension-table";
 import TextAlign from "@tiptap/extension-text-align";
 import StarterKit from "@tiptap/starter-kit";
@@ -33,6 +33,32 @@ const Control = Node.create({
   },
 });
 
+const InlineControl = Node.create({
+  name: "inlineControl",
+  group: "inline",
+  inline: true,
+  atom: true,
+  addAttributes() { return { action: { default: "end" }, value: { default: "" } }; },
+  parseHTML() { return [{ tag: "span[data-inline-control]" }]; },
+  renderHTML({ node, HTMLAttributes }) {
+    const { action, value } = node.attrs;
+    const text = { repeat: `Repeat ${value}`, if: `If ${value}`, else: "Otherwise", end: "End" };
+    return ["span", mergeAttributes(HTMLAttributes, {
+      "data-inline-control": "", class: "field-chip inline-control", contenteditable: "false",
+    }), text[action]];
+  },
+});
+
+const WordProperties = Extension.create({
+  name: "wordProperties",
+  addGlobalAttributes() {
+    return [{ types: ["paragraph", "heading"], attributes: {
+      wordProperties: { default: null, rendered: false },
+      useWordStyle: { default: true, rendered: false },
+    } }];
+  },
+});
+
 const RepeatRow = TableRow.extend({
   addAttributes() {
     return { ...this.parent?.(), repeat: {
@@ -61,6 +87,12 @@ function scopeAtCursor(editor, catalog) {
     const node = $from.node(depth);
     if (node.type.name === "tableRow") stack.push(node.attrs.repeat);
   }
+  $from.parent.forEach((node, offset) => {
+    if (offset >= $from.parentOffset || node.type.name !== "inlineControl") return;
+    const { action, value } = node.attrs;
+    if (action === "repeat" || action === "if") stack.push(action === "repeat" ? value : null);
+    if (action === "end") stack.pop();
+  });
   return new Set(stack.flatMap(collection => repeatVariables(collection, catalog)));
 }
 
@@ -89,7 +121,7 @@ export function createTemplateEditor({ element, toolbar, catalog, content, onCha
       StarterKit.configure({ blockquote: false, codeBlock: false, horizontalRule: false,
         code: false, link: false, strike: false, heading: { levels: [1, 2, 3] } }),
       TableKit.configure({ table: { resizable: true }, tableRow: false }),
-      RepeatRow, TextAlign.configure({ types: ["heading", "paragraph"] }), Field, Control,
+      RepeatRow, TextAlign.configure({ types: ["heading", "paragraph"] }), Field, Control, InlineControl, WordProperties,
     ],
     editorProps: { attributes: { role: "textbox", "aria-label": "Template editor", "aria-multiline": "true" } },
     onUpdate: ({ editor }) => { updateTools(editor); onChange(editor.getJSON()); },
@@ -188,8 +220,9 @@ export function createTemplateEditor({ element, toolbar, catalog, content, onCha
       picker.value = "";
     } else if (event.target.matches("[data-text-style]")) {
       const value = Number(event.target.value);
-      if (value) editor.chain().focus().setHeading({ level: value }).run();
-      else editor.chain().focus().setParagraph().run();
+      const chain = editor.chain().focus();
+      if (value) chain.setHeading({ level: value }).run();
+      else chain.setParagraph().updateAttributes("paragraph", { useWordStyle: false }).run();
     } else if (event.target.matches("[data-align]")) {
       editor.chain().focus().setTextAlign(event.target.value).run();
     }
