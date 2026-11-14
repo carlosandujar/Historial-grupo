@@ -3,6 +3,7 @@ const form = byId("export-form");
 const fields = byId("form-fields");
 const yearFilters = byId("year-filters");
 const template = byId("template");
+const templateDownload = byId("template-download");
 const customTemplate = byId("custom-template");
 const workbook = byId("workbook");
 const download = byId("download");
@@ -10,32 +11,31 @@ const status = byId("status");
 const cancel = byId("cancel");
 const reportTypes = {
   journals: {
-    sheet: "Journals", output: "publicaciones.docx", label: "Journal publications", participantRole: "author",
+    sheet: "Journals", output: "publicaciones.docx", participantRole: "author",
   },
   conferences: {
-    sheet: "Conferences", output: "conferencias.docx", label: "Conference publications", participantRole: "author",
+    sheet: "Conferences", output: "conferencias.docx", participantRole: "author",
   },
   activities: {
-    sheet: "Activities", output: "actividades.docx", label: "Activities", participantRole: "contact",
+    sheet: "Activities", output: "actividades.docx", participantRole: "contact",
     sheetHint: "Only rows marked Y, Yes, S, or Verdadero in the Export column are included.",
     countNouns: ["activity", "activities"],
   },
   theses: {
-    sheet: "PhD Theses", output: "tesis_doctorales.docx", label: "PhD theses",
+    sheet: "PhD Theses", output: "tesis_doctorales.docx",
   },
   progress: {
-    sheet: "PhD in progress", output: "tesis_en_curso.docx", label: "Theses in progress",
+    sheet: "PhD in progress", output: "tesis_en_curso.docx",
   },
   projects: {
     sheet: "Projects-international", output: "proyectos_internacionales.docx", isProject: true,
-    label: "International projects",
   },
   national: {
     sheet: "Projects-national", output: "proyectos_nacionales.docx", isProject: true,
-    label: "National projects",
   },
 };
 let catalog;
+let catalogFailed = false;
 let worker;
 let activeJob;
 let downloadURL;
@@ -58,50 +58,43 @@ function updateOptions() {
     const options = catalog[kind] ?? [];
     template.replaceChildren(...options.map(({ label, url }) => new Option(label, url)),
       new Option("Use my own template…", "custom"));
+    const message = byId("catalog-status");
+    message.hidden = options.length > 0;
+    message.textContent = options.length ? "" : catalogFailed
+      ? "The template catalog could not be loaded. You can use your own DOCX template."
+      : "No built-in templates are available for this report. You can use your own DOCX template.";
   }
-  updateCustom();
+  updateTemplateSelection();
 }
 
 async function loadCatalog() {
-  const message = byId("catalog-status");
   try {
     const response = await fetch("templates/catalogo.json", { cache: "no-cache", signal: AbortSignal.timeout(10_000) });
     if (!response.ok) throw new Error("Template catalog unavailable.");
-    const entries = await response.json();
-    const items = [];
-    for (const [kind, type] of Object.entries(reportTypes)) {
-      for (const { url, label } of entries[kind] ?? []) {
-        const item = document.createElement("li");
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "";
-        link.textContent = `${type.label} · ${label}`;
-        const arrow = document.createElement("span");
-        arrow.setAttribute("aria-hidden", "true");
-        arrow.textContent = "↓";
-        link.append(arrow);
-        item.append(link);
-        items.push(item);
-      }
-    }
-    byId("template-library").replaceChildren(...items);
-    message.textContent = "The catalog is empty. You can use your own .docx template.";
-    message.hidden = items.length > 0;
-    catalog = entries;
+    catalog = await response.json();
   } catch {
     catalog = {};
-    message.textContent = "The template catalog could not be loaded. You can use your own .docx template.";
+    catalogFailed = true;
   }
   updateOptions();
   template.disabled = false;
   byId("generate").disabled = false;
 }
 
-function updateCustom() {
+function updateTemplateSelection() {
   const custom = template.value === "custom";
   byId("custom-field").hidden = !custom;
   customTemplate.required = custom;
   customTemplate.disabled = !custom;
+  const selected = catalog?.[selectedKind()]?.find(({ url }) => url === template.value);
+  templateDownload.hidden = !selected;
+  if (selected) {
+    templateDownload.href = selected.url;
+    templateDownload.textContent = `Download template '${selected.label}'`;
+  } else {
+    templateDownload.removeAttribute("href");
+    templateDownload.textContent = "";
+  }
 }
 
 function showStatus(message, state = "progress") {
@@ -184,7 +177,7 @@ function getWorker() {
 
 form.addEventListener("change", ({ target }) => {
   if (target.name === "kind") updateOptions();
-  if (target === template) updateCustom();
+  if (target === template) updateTemplateSelection();
 });
 form.addEventListener("input", () => {
   if (!activeJob) {

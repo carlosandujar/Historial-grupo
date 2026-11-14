@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Generate Word reports on ViRVIG publications, activities, theses, and projects from the group history workbook.">
   <title>Export reports · ViRVIG</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="style.css?v=template-download">
+  <script src="app.js?v=template-download" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -43,6 +43,8 @@
             <div class="field">
               <label class="label" for="template">Word template</label>
               <select id="template" disabled><option>Loading templates…</option></select>
+              <small id="catalog-status" role="status" hidden></small>
+              <a id="template-download" download hidden></a>
               <div id="custom-field" class="custom" hidden>
                 <label class="sr-only" for="custom-template">Select your DOCX template</label>
                 <input id="custom-template" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
@@ -77,12 +79,9 @@
         </form>
         <noscript>Enable JavaScript to generate reports in your browser.</noscript>
       </section>
-      <aside class="sidebar" aria-label="Templates and help">
-        <section class="panel library" aria-labelledby="library-title">
-          <h2 id="library-title">Built-in templates</h2>
-          <p>Download a copy, edit it in Word, and select it as your own template.</p>
-          <p id="catalog-status" role="status">Loading templates…</p>
-          <ul id="template-library" class="templates"></ul>
+      <aside class="sidebar" aria-label="Template help">
+        <section class="panel" aria-labelledby="library-title">
+          <h2 id="library-title">Template help</h2>
           <details>
             <summary>Template fields</summary>
             <p><strong>Journal and conference publications</strong> · Loop over <code>publications</code> for a flat list or <code>groups</code> to group by year. Each <code>pub</code> includes every named column in its worksheet. Use <code>{{ pub.journal_title }}</code> for journals or <code>{{ pub.conference_proceedings }}</code> for conferences. Access the original value by header, for example <code>{{ pub.excel['Conference proceedings'] }}</code>.</p>

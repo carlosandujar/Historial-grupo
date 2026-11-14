@@ -12,4 +12,4 @@ Team and participant filters are optional for every report. Where year filters a
 
 ## Built-in template catalog
 
-The template selector and download list read `dist/templates/catalogo.json`. The build generates this catalog by scanning the repository's top-level `templates/` directory, with a subfolder for each report type. To add a built-in template, put the DOCX in its report's subfolder and rebuild. Its filename determines the label in the app. To try a template without rebuilding, choose **Use my own template…** in the form.
+The selector lists the built-in templates for the selected report type. The link below it downloads the selected built-in template. Choose **Use my own template…** to upload a DOCX instead. The build generates `dist/templates/catalogo.json` by scanning the repository's top-level `templates/` directory, with a subfolder for each report type. To add a built-in template, put the DOCX in its report's subfolder and rebuild. Its filename determines the label in the app.

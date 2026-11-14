@@ -1,4 +1,4 @@
-"""Comprueba si hay DOI o títulos duplicados en la hoja Journals."""
+"""Checks for duplicate DOIs or titles in the Journals sheet."""
 
 import argparse
 from collections import defaultdict
@@ -16,7 +16,7 @@ DOI_PREFIX = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)+", re.I)
 
 
 def find_duplicates(rows):
-    """Devuelve los valores duplicados y sus filas de Excel por columna."""
+    """Returns the duplicate values and their Excel rows by column."""
     headers = tuple(str(cell).strip() for cell in next(rows, ()))
     for name in COLUMNS:
         if headers.count(name) != 1:
