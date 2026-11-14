@@ -76,7 +76,7 @@ Each exporter reads the workbook and fills a DOCX template. Use `--template` to 
 
 #### Python setup
 
-Run the Python commands from the repository root. Install the dependencies with `python -m pip install lxml truststore openpyxl docxtpl "docxcompose>=2,<3"` and set `$workbook` to the path of your local copy.
+Run the Python commands from the repository root. With Python 3.10 or later, install the dependencies declared in `pyproject.toml` with `python -m pip install .` and set `$workbook` to the path of your local copy.
 
 ```powershell
 $workbook = "../../Historial del Grup/Historial 2026-11.xlsx"
